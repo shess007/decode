@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { splitFilePath } from "./change-type-colors";
+import { useHighlighter, type TokenizedLine } from "@/lib/use-highlighter";
 
 interface DiffPanelProps {
   filePath: string | null;
@@ -38,7 +39,9 @@ function parseDiffLines(raw: string): DiffLine[] {
       continue;
     }
 
-    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+    const hunkMatch = line.match(
+      /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/
+    );
     if (hunkMatch) {
       oldLine = parseInt(hunkMatch[1], 10);
       newLine = parseInt(hunkMatch[2], 10);
@@ -53,10 +56,13 @@ function parseDiffLines(raw: string): DiffLine[] {
       lines.push({ type: "add", content: line.slice(1), newNum: newLine });
       newLine++;
     } else if (line.startsWith("-")) {
-      lines.push({ type: "remove", content: line.slice(1), oldNum: oldLine });
+      lines.push({
+        type: "remove",
+        content: line.slice(1),
+        oldNum: oldLine,
+      });
       oldLine++;
     } else {
-      // Context line (starts with space or is empty)
       lines.push({
         type: "context",
         content: line.startsWith(" ") ? line.slice(1) : line,
@@ -71,32 +77,85 @@ function parseDiffLines(raw: string): DiffLine[] {
   return lines;
 }
 
-const lineStyles: Record<DiffLine["type"], React.CSSProperties> = {
-  add: {
-    background: "rgba(52, 211, 153, 0.06)",
-    color: "var(--green)",
-  },
-  remove: {
-    background: "rgba(240, 123, 110, 0.06)",
-    color: "var(--coral)",
-  },
-  context: {
-    background: "transparent",
-    color: "var(--text-secondary)",
-  },
-  header: {
-    background: "var(--bg-muted)",
-    color: "var(--accent)",
-    fontWeight: 600,
-  },
-  meta: {
-    background: "transparent",
-    color: "var(--text-tertiary)",
-    fontStyle: "italic",
-  },
+const rowBg: Record<DiffLine["type"], string> = {
+  add: "rgba(52, 211, 153, 0.06)",
+  remove: "rgba(240, 123, 110, 0.06)",
+  context: "transparent",
+  header: "var(--bg-muted)",
+  meta: "transparent",
 };
 
-export function DiffPanel({ filePath, workspace, repo, prId }: DiffPanelProps) {
+/** Render a single line's content — either syntax-highlighted tokens or plain text */
+function LineContent({
+  line,
+  tokens,
+}: {
+  line: DiffLine;
+  tokens: TokenizedLine | null;
+}) {
+  const style: React.CSSProperties = {
+    padding:
+      line.type === "header" || line.type === "meta" ? "0 16px" : "0 8px",
+    whiteSpace: "pre",
+    flex: 1,
+    minWidth: 0,
+  };
+
+  // For meta/header lines, use plain styling
+  if (line.type === "meta") {
+    return (
+      <span style={{ ...style, color: "var(--text-tertiary)", fontStyle: "italic" }}>
+        {line.content}
+      </span>
+    );
+  }
+  if (line.type === "header") {
+    return (
+      <span style={{ ...style, color: "var(--accent)", fontWeight: 600 }}>
+        {line.content}
+      </span>
+    );
+  }
+
+  // Syntax-highlighted tokens
+  if (tokens) {
+    return (
+      <span style={style}>
+        {tokens.map((token, i) => (
+          <span
+            key={i}
+            style={{
+              color: token.color,
+              fontStyle: token.fontStyle === 1 ? "italic" : undefined,
+              fontWeight: token.fontStyle === 2 ? "bold" : undefined,
+            }}
+          >
+            {token.content}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  // Fallback: plain text with diff-type coloring
+  const fallbackColor =
+    line.type === "add"
+      ? "var(--green)"
+      : line.type === "remove"
+        ? "var(--coral)"
+        : "var(--text-secondary)";
+
+  return (
+    <span style={{ ...style, color: fallbackColor }}>{line.content}</span>
+  );
+}
+
+export function DiffPanel({
+  filePath,
+  workspace,
+  repo,
+  prId,
+}: DiffPanelProps) {
   const [diff, setDiff] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,17 +195,34 @@ export function DiffPanel({ filePath, workspace, repo, prId }: DiffPanelProps) {
     };
   }, [filePath, workspace, repo, prId]);
 
-  // Empty state — no file selected
+  const parsedLines = useMemo(
+    () => (diff ? parseDiffLines(diff) : []),
+    [diff]
+  );
+
+  // Extract just the code content lines for syntax highlighting
+  // (skip meta/header lines — they don't need highlighting)
+  const codeLines = useMemo(
+    () =>
+      parsedLines.map((line) =>
+        line.type === "meta" || line.type === "header" ? "" : line.content
+      ),
+    [parsedLines]
+  );
+
+  const highlightedTokens = useHighlighter(codeLines, filePath);
+
+  // Empty state
   if (!filePath) {
     return (
       <div
         className="flex items-center justify-center h-full"
         style={{ color: "var(--text-tertiary)", fontSize: "12px" }}
       >
-        <div className="text-center" style={{ maxWidth: "180px", lineHeight: 1.6 }}>
-          <span style={{ fontSize: "20px", display: "block", marginBottom: "8px", opacity: 0.4 }}>
-            { }
-          </span>
+        <div
+          className="text-center"
+          style={{ maxWidth: "180px", lineHeight: 1.6 }}
+        >
           Click a file card to view its diff
         </div>
       </div>
@@ -176,32 +252,36 @@ export function DiffPanel({ filePath, workspace, repo, prId }: DiffPanelProps) {
         {loading && (
           <div
             className="flex items-center justify-center"
-            style={{ padding: "40px", color: "var(--text-tertiary)", fontSize: "12px" }}
+            style={{
+              padding: "40px",
+              color: "var(--text-tertiary)",
+              fontSize: "12px",
+            }}
           >
             Loading diff...
           </div>
         )}
 
         {error && (
-          <div
-            style={{
-              padding: "16px",
-              color: "var(--coral)",
-              fontSize: "12px",
-            }}
-          >
+          <div style={{ padding: "16px", color: "var(--coral)", fontSize: "12px" }}>
             {error}
           </div>
         )}
 
         {diff && !loading && (
-          <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", lineHeight: 1.65 }}>
-            {parseDiffLines(diff).map((line, i) => (
+          <div
+            style={{
+              fontSize: "12px",
+              fontFamily: "var(--font-mono)",
+              lineHeight: 1.65,
+            }}
+          >
+            {parsedLines.map((line, i) => (
               <div
                 key={i}
                 className="flex"
                 style={{
-                  ...lineStyles[line.type],
+                  background: rowBg[line.type],
                   minHeight: "20px",
                 }}
               >
@@ -247,24 +327,25 @@ export function DiffPanel({ filePath, workspace, repo, prId }: DiffPanelProps) {
                             : "transparent",
                     }}
                   >
-                    {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
+                    {line.type === "add"
+                      ? "+"
+                      : line.type === "remove"
+                        ? "-"
+                        : " "}
                   </span>
                 )}
 
-                {/* Content */}
-                <span
-                  style={{
-                    padding:
-                      line.type === "header" || line.type === "meta"
-                        ? "0 16px"
-                        : "0 8px",
-                    whiteSpace: "pre",
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {line.content}
-                </span>
+                {/* Content — syntax highlighted or plain */}
+                <LineContent
+                  line={line}
+                  tokens={
+                    highlightedTokens &&
+                    line.type !== "meta" &&
+                    line.type !== "header"
+                      ? highlightedTokens[i] ?? null
+                      : null
+                  }
+                />
               </div>
             ))}
           </div>
