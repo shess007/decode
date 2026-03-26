@@ -29,6 +29,7 @@ interface PostedComment {
   lineType: "add" | "remove" | "context";
   content: string;
   commentId: number;
+  htmlUrl?: string;
 }
 
 function parseDiffLines(raw: string): DiffLine[] {
@@ -288,15 +289,41 @@ function PostedCommentBubble({ comment }: { comment: PostedComment }) {
       }}
     >
       <div
-        style={{
-          fontSize: "11px",
-          color: "var(--text-primary)",
-          lineHeight: 1.5,
-          fontFamily: "var(--font-sans)",
-        }}
+        className="flex items-start justify-between"
+        style={{ gap: "8px" }}
       >
-        <span style={{ color: "var(--accent)", marginRight: "6px" }}>💬</span>
-        {comment.content}
+        <div
+          style={{
+            fontSize: "11px",
+            color: "var(--text-primary)",
+            lineHeight: 1.5,
+            fontFamily: "var(--font-sans)",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ color: "var(--accent)", marginRight: "6px" }}>💬</span>
+          {comment.content}
+        </div>
+        {comment.htmlUrl && (
+          <a
+            href={comment.htmlUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "10px",
+              color: "var(--accent)",
+              textDecoration: "none",
+              flexShrink: 0,
+              opacity: 0.7,
+              transition: "opacity var(--transition-fast)",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+          >
+            view in BB ↗
+          </a>
+        )}
       </div>
     </div>
   );
@@ -426,6 +453,7 @@ export function DiffPanel({
           lineType: lineType as "add" | "remove" | "context",
           content,
           commentId: data.commentId,
+          htmlUrl: data.htmlUrl,
         };
 
         setPostedComments((prev) => {

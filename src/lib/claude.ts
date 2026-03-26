@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { DecodeInput, DecodeReport } from "./types";
 
-const client = new Anthropic();
+export type AIModel = "sonnet" | "gemini";
 
 const SYSTEM_PROMPT = `You are Decode, a PR comprehension assistant. Your job is to help a code reviewer UNDERSTAND a pull request — not to review it yourself. You never judge code quality or suggest improvements. Instead, you explain what changed, why it likely changed, how changes connect, and what order a reviewer should read the files in.
 
@@ -76,9 +77,19 @@ function buildUserMessage(input: DecodeInput): string {
   return parts.join("\n");
 }
 
-export async function generateReport(
-  input: DecodeInput
-): Promise<DecodeReport> {
+function parseJsonResponse(text: string): DecodeReport {
+  // Strip markdown code fences if present
+  const jsonStr = text
+    .replace(/^```(?:json)?\n?/, "")
+    .replace(/\n?```$/, "")
+    .trim();
+  return JSON.parse(jsonStr) as DecodeReport;
+}
+
+// ── Anthropic (Sonnet) ──────────────────────────────────────────
+
+async function generateWithSonnet(input: DecodeInput): Promise<DecodeReport> {
+  const client = new Anthropic();
   const userMessage = buildUserMessage(input);
 
   const response = await client.messages.create({
@@ -90,10 +101,43 @@ export async function generateReport(
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
+  return parseJsonResponse(text);
+}
 
-  // Strip markdown code fences if present
-  const jsonStr = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+// ── Google (Gemini Pro) ─────────────────────────────────────────
 
-  const report: DecodeReport = JSON.parse(jsonStr);
-  return report;
+async function generateWithGemini(input: DecodeInput): Promise<DecodeReport> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-pro-preview-06-05",
+    generationConfig: {
+      responseMimeType: "application/json",
+      maxOutputTokens: 12000,
+    },
+    systemInstruction: SYSTEM_PROMPT,
+  });
+
+  const userMessage = buildUserMessage(input);
+  const result = await model.generateContent(userMessage);
+  const text = result.response.text();
+  return parseJsonResponse(text);
+}
+
+// ── Public API ──────────────────────────────────────────────────
+
+export async function generateReport(
+  input: DecodeInput,
+  aiModel: AIModel = "gemini"
+): Promise<DecodeReport> {
+  console.log(`[ai] Using model: ${aiModel}`);
+
+  if (aiModel === "sonnet") {
+    return generateWithSonnet(input);
+  }
+  return generateWithGemini(input);
 }

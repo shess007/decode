@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       commentId: comment.id,
-      links: comment.links,
+      htmlUrl: comment.links?.html?.href || null,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Internal error";

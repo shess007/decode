@@ -67,8 +67,8 @@ interface DecodeState {
   selectPR: (pr: BitbucketPullRequest) => void;
   runPreflight: (workspace: string, repo: string, prId: number) => Promise<PreflightResult | null>;
   runPreflightFromUrl: (url: string) => Promise<PreflightResult | null>;
-  decode: (workspace: string, repo: string, prId: number) => Promise<void>;
-  decodeFromUrl: (url: string) => Promise<void>;
+  decode: (workspace: string, repo: string, prId: number, model?: string) => Promise<void>;
+  decodeFromUrl: (url: string, model?: string) => Promise<void>;
   decodeLocal: (workspace: string, repo: string, prId: number) => Promise<void>;
   decodeLocalFromUrl: (url: string) => Promise<void>;
   pollForReport: (workspace: string, repo: string, prId: number) => void;
@@ -208,13 +208,13 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
     set({ preflight: null });
   },
 
-  decode: async (workspace: string, repo: string, prId: number) => {
+  decode: async (workspace: string, repo: string, prId: number, model?: string) => {
     set({ decoding: true, report: null, error: null });
     try {
       const res = await fetch("/api/decode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace, repo, prId }),
+        body: JSON.stringify({ workspace, repo, prId, model }),
       });
 
       if (!res.ok) {
@@ -232,13 +232,13 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
     }
   },
 
-  decodeFromUrl: async (url: string) => {
+  decodeFromUrl: async (url: string, model?: string) => {
     set({ decoding: true, report: null, error: null });
     try {
       const res = await fetch("/api/decode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prUrl: url }),
+        body: JSON.stringify({ prUrl: url, model }),
       });
 
       if (!res.ok) {

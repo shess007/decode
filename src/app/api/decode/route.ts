@@ -6,7 +6,7 @@ import {
   getCommitMessages,
   parsePrUrl,
 } from "@/lib/bitbucket";
-import { generateReport } from "@/lib/claude";
+import { generateReport, type AIModel } from "@/lib/claude";
 import { readCache, writeCache } from "@/lib/cache";
 import { filterDiffstat, filterDiff } from "@/lib/diff-filter";
 import type { DecodeInput } from "@/lib/types";
@@ -38,6 +38,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const aiModel: AIModel = body.model === "sonnet" ? "sonnet" : "gemini";
 
     // Check cache first (skip with ?fresh=true)
     const skipCache = body.fresh === true;
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
       diff: filteredDiff,
     };
 
-    const report = await generateReport(input);
+    const report = await generateReport(input, aiModel);
 
     // Save to cache
     await writeCache(cacheKey, report);

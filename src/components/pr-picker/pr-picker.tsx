@@ -46,7 +46,11 @@ export function PRPicker() {
     r.name.toLowerCase().includes(repoFilter.toLowerCase())
   );
 
-  const handleDecode = async () => {
+  const [selectedModel, setSelectedModel] = useState<string>("gemini");
+
+  const handleDecode = async (model?: string) => {
+    const m = typeof model === "string" ? model : selectedModel;
+    setSelectedModel(m);
     // Run preflight first
     let result;
     if (mode === "url" && prUrl) {
@@ -58,18 +62,22 @@ export function PRPicker() {
 
     // If cached or small, proceed immediately
     if (result.cached || !result.warning) {
-      await proceedWithDecode();
+      await doDecode(m);
     }
     // Otherwise the preflight card will show, user must confirm
   };
 
   const proceedWithDecode = async () => {
+    await doDecode(selectedModel);
+  };
+
+  const doDecode = async (model: string) => {
     clearPreflight();
     if (mode === "url" && prUrl) {
-      await decodeFromUrl(prUrl);
+      await decodeFromUrl(prUrl, model);
       router.push("/decode/report");
     } else if (selectedWorkspace && selectedRepo && selectedPR) {
-      await decode(selectedWorkspace, selectedRepo, selectedPR.id);
+      await decode(selectedWorkspace, selectedRepo, selectedPR.id, model);
       router.push("/decode/report");
     }
   };
@@ -159,42 +167,14 @@ export function PRPicker() {
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
           />
-          <div className="flex" style={{ gap: "10px" }}>
-            <button
-              onClick={handleDecode}
-              disabled={!prUrl || decoding || preflighting}
-              style={{
-                padding: "12px 24px",
-                background: "var(--accent)",
-                color: "#fff",
-                fontWeight: 500,
-                fontSize: "13px",
-                borderRadius: "var(--radius-md)",
-                border: "none",
-                cursor: !prUrl || decoding || preflighting ? "not-allowed" : "pointer",
-                opacity: !prUrl || decoding || preflighting ? 0.5 : 1,
-              }}
-            >
-              {preflighting ? "Checking..." : decoding ? "Decoding..." : "Decode (AI)"}
-            </button>
-            <button
-              onClick={handleLocalDecode}
-              disabled={!prUrl || waitingForLocal}
-              style={{
-                padding: "12px 24px",
-                background: "transparent",
-                color: "var(--text-secondary)",
-                fontWeight: 500,
-                fontSize: "13px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-default)",
-                cursor: !prUrl || waitingForLocal ? "not-allowed" : "pointer",
-                opacity: !prUrl || waitingForLocal ? 0.5 : 1,
-              }}
-            >
-              {waitingForLocal ? "Preparing..." : "Decode (free)"}
-            </button>
-          </div>
+          <DecodeButtons
+            disabled={!prUrl}
+            decoding={decoding}
+            preflighting={preflighting}
+            waitingForLocal={waitingForLocal}
+            onDecode={handleDecode}
+            onLocalDecode={handleLocalDecode}
+          />
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -404,46 +384,14 @@ export function PRPicker() {
 
           {/* Decode buttons */}
           {selectedPR && !preflight && (
-            <div className="flex" style={{ gap: "10px" }}>
-              <button
-                onClick={handleDecode}
-                disabled={decoding || preflighting}
-                style={{
-                  padding: "12px 24px",
-                  background: "var(--accent)",
-                  color: "#fff",
-                  fontWeight: 500,
-                  fontSize: "13px",
-                  borderRadius: "var(--radius-md)",
-                  border: "none",
-                  cursor: decoding || preflighting ? "not-allowed" : "pointer",
-                  opacity: decoding || preflighting ? 0.5 : 1,
-                }}
-              >
-                {preflighting
-                  ? "Checking..."
-                  : decoding
-                    ? "Decoding..."
-                    : `Decode (AI)`}
-              </button>
-              <button
-                onClick={handleLocalDecode}
-                disabled={waitingForLocal}
-                style={{
-                  padding: "12px 24px",
-                  background: "transparent",
-                  color: "var(--text-secondary)",
-                  fontWeight: 500,
-                  fontSize: "13px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-default)",
-                  cursor: waitingForLocal ? "not-allowed" : "pointer",
-                  opacity: waitingForLocal ? 0.5 : 1,
-                }}
-              >
-                {waitingForLocal ? "Preparing..." : "Decode (free)"}
-              </button>
-            </div>
+            <DecodeButtons
+              disabled={false}
+              decoding={decoding}
+              preflighting={preflighting}
+              waitingForLocal={waitingForLocal}
+              onDecode={handleDecode}
+              onLocalDecode={handleLocalDecode}
+            />
           )}
         </div>
       )}
@@ -635,6 +583,79 @@ function Stat({
           {sub}
         </div>
       )}
+    </div>
+  );
+}
+
+function DecodeButtons({
+  disabled,
+  decoding,
+  preflighting,
+  waitingForLocal,
+  onDecode,
+  onLocalDecode,
+}: {
+  disabled: boolean;
+  decoding: boolean;
+  preflighting: boolean;
+  waitingForLocal: boolean;
+  onDecode: (model: string) => void;
+  onLocalDecode: () => void;
+}) {
+  const busy = decoding || preflighting;
+  const btnBase = {
+    padding: "12px 20px",
+    fontWeight: 500,
+    fontSize: "13px",
+    borderRadius: "var(--radius-md)",
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  };
+
+  return (
+    <div className="flex flex-wrap" style={{ gap: "8px" }}>
+      <button
+        onClick={() => onDecode("gemini")}
+        disabled={disabled || busy}
+        style={{
+          ...btnBase,
+          background: "var(--accent)",
+          color: "#fff",
+          border: "none",
+          cursor: disabled || busy ? "not-allowed" : "pointer",
+          opacity: disabled || busy ? 0.5 : 1,
+        }}
+      >
+        {preflighting ? "Checking..." : decoding ? "Decoding..." : "Gemini Pro"}
+      </button>
+      <button
+        onClick={() => onDecode("sonnet")}
+        disabled={disabled || busy}
+        style={{
+          ...btnBase,
+          background: "transparent",
+          color: "var(--text-secondary)",
+          border: "1px solid var(--border-default)",
+          cursor: disabled || busy ? "not-allowed" : "pointer",
+          opacity: disabled || busy ? 0.5 : 1,
+        }}
+      >
+        Sonnet
+      </button>
+      <button
+        onClick={onLocalDecode}
+        disabled={disabled || waitingForLocal}
+        style={{
+          ...btnBase,
+          background: "transparent",
+          color: "var(--text-tertiary)",
+          border: "1px solid var(--border-default)",
+          cursor: disabled || waitingForLocal ? "not-allowed" : "pointer",
+          opacity: disabled || waitingForLocal ? 0.5 : 1,
+        }}
+      >
+        {waitingForLocal ? "Preparing..." : "Free"}
+      </button>
     </div>
   );
 }
