@@ -499,7 +499,10 @@ export function DiffPanel({
               label="›"
             />
           </div>
-          <span
+          <a
+            href={`https://bitbucket.org/${workspace}/${repo}/pull-requests/${prId}/diff#chg-${filePath}`}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "11px",
@@ -507,11 +510,16 @@ export function DiffPanel({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               minWidth: 0,
+              textDecoration: "none",
+              transition: "opacity var(--transition-fast)",
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
             <span style={{ color: "var(--text-tertiary)" }}>{directory}</span>
             <span style={{ color: "var(--text-primary)" }}>{filename}</span>
-          </span>
+            <span style={{ color: "var(--text-tertiary)", marginLeft: "4px", fontSize: "10px" }}>↗</span>
+          </a>
         </div>
         {currentIndex !== undefined && totalFiles !== undefined && (
           <span
@@ -578,7 +586,7 @@ export function DiffPanel({
               return (
                 <div key={i}>
                   <div
-                    className={`flex group${isCommentable ? " diff-line-hover" : ""}`}
+                    className={`flex group${isCommentable ? " diff-line-hover" : ""}${isCommenting ? " diff-line-commenting" : ""}`}
                     style={{
                       background: rowBg[line.type],
                       minHeight: "20px",

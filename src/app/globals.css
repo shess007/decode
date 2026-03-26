@@ -94,6 +94,10 @@ body {
 .diff-line-hover:hover {
   box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.05);
 }
+.diff-line-commenting {
+  box-shadow: inset 0 0 0 1000px rgba(124, 106, 240, 0.1);
+  border-left: 2px solid var(--accent);
+}
 
 /* Skeleton animation */
 @keyframes pulse {
