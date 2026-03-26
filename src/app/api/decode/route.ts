@@ -8,6 +8,7 @@ import {
 } from "@/lib/bitbucket";
 import { generateReport } from "@/lib/claude";
 import { readCache, writeCache } from "@/lib/cache";
+import { filterDiffstat, filterDiff } from "@/lib/diff-filter";
 import type { DecodeInput } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -58,6 +59,33 @@ export async function POST(request: NextRequest) {
       getCommitMessages(workspace, repo, prId),
     ]);
 
+    // Map diffstat to our format
+    const allDiffstat = diffstatItems.map((d) => ({
+      path: d.new?.path || d.old?.path || "unknown",
+      status: d.status as "added" | "modified" | "removed" | "renamed",
+      linesAdded: d.lines_added,
+      linesRemoved: d.lines_removed,
+    }));
+
+    // Filter low-value files
+    const { included: filteredDiffstat, excluded: excludedDiffstat } =
+      filterDiffstat(allDiffstat);
+    const { filteredDiff, stats } = filterDiff(diff);
+
+    if (stats.excludedFiles > 0) {
+      console.log(
+        `[filter] Excluded ${stats.excludedFiles} files: ${stats.excludedPaths.join(", ")}`
+      );
+    }
+    if (stats.truncatedFiles.length > 0) {
+      console.log(
+        `[filter] Truncated ${stats.truncatedFiles.length} files: ${stats.truncatedFiles.join(", ")}`
+      );
+    }
+    console.log(
+      `[filter] Diff: ${stats.originalDiffLines} → ${stats.filteredDiffLines} lines (${Math.round((1 - stats.filteredDiffLines / Math.max(stats.originalDiffLines, 1)) * 100)}% reduction)`
+    );
+
     const input: DecodeInput = {
       pr: {
         title: pr.title,
@@ -67,13 +95,8 @@ export async function POST(request: NextRequest) {
         destinationBranch: pr.destination.branch.name,
         commitMessages,
       },
-      diffstat: diffstatItems.map((d) => ({
-        path: d.new?.path || d.old?.path || "unknown",
-        status: d.status,
-        linesAdded: d.lines_added,
-        linesRemoved: d.lines_removed,
-      })),
-      diff,
+      diffstat: filteredDiffstat,
+      diff: filteredDiff,
     };
 
     const report = await generateReport(input);

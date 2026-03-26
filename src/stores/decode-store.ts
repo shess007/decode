@@ -6,6 +6,31 @@ import type {
   DecodeReport,
 } from "@/lib/types";
 
+export interface PreflightResult {
+  cached: boolean;
+  estimatedCost: number;
+  estimatedInputTokens?: number;
+  warning?: "medium" | "large" | null;
+  pr?: {
+    title: string;
+    author: string;
+    sourceBranch: string;
+    destinationBranch: string;
+  };
+  files?: {
+    total: number;
+    included: number;
+    excluded: number;
+    excludedPaths: string[];
+  };
+  diff?: {
+    originalLines: number;
+    filteredLines: number;
+    reductionPercent: number;
+    truncatedFiles: string[];
+  };
+}
+
 interface DecodeState {
   // PR picker state
   workspaces: BitbucketWorkspace[];
@@ -19,7 +44,11 @@ interface DecodeState {
   loadingWorkspaces: boolean;
   loadingRepos: boolean;
   loadingPRs: boolean;
+  preflighting: boolean;
   decoding: boolean;
+
+  // Preflight
+  preflight: PreflightResult | null;
 
   // Report + its context (always set alongside report)
   report: DecodeReport | null;
@@ -33,8 +62,11 @@ interface DecodeState {
   selectWorkspace: (workspace: string) => void;
   selectRepo: (repo: string) => void;
   selectPR: (pr: BitbucketPullRequest) => void;
+  runPreflight: (workspace: string, repo: string, prId: number) => Promise<PreflightResult | null>;
+  runPreflightFromUrl: (url: string) => Promise<PreflightResult | null>;
   decode: (workspace: string, repo: string, prId: number) => Promise<void>;
   decodeFromUrl: (url: string) => Promise<void>;
+  clearPreflight: () => void;
   reset: () => void;
 }
 
@@ -48,7 +80,9 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
   loadingWorkspaces: false,
   loadingRepos: false,
   loadingPRs: false,
+  preflighting: false,
   decoding: false,
+  preflight: null,
   report: null,
   reportContext: null,
   error: null,
@@ -112,6 +146,58 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
 
   selectPR: (pr: BitbucketPullRequest) => {
     set({ selectedPR: pr, report: null });
+  },
+
+  runPreflight: async (workspace: string, repo: string, prId: number) => {
+    set({ preflighting: true, preflight: null, error: null });
+    try {
+      const res = await fetch("/api/decode/preflight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace, repo, prId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Preflight failed");
+      }
+      const result: PreflightResult = await res.json();
+      set({ preflight: result, preflighting: false });
+      return result;
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : "Preflight failed",
+        preflighting: false,
+      });
+      return null;
+    }
+  },
+
+  runPreflightFromUrl: async (url: string) => {
+    set({ preflighting: true, preflight: null, error: null });
+    try {
+      const res = await fetch("/api/decode/preflight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prUrl: url }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Preflight failed");
+      }
+      const result: PreflightResult = await res.json();
+      set({ preflight: result, preflighting: false });
+      return result;
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : "Preflight failed",
+        preflighting: false,
+      });
+      return null;
+    }
+  },
+
+  clearPreflight: () => {
+    set({ preflight: null });
   },
 
   decode: async (workspace: string, repo: string, prId: number) => {

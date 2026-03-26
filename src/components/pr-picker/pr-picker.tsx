@@ -15,14 +15,19 @@ export function PRPicker() {
     loadingWorkspaces,
     loadingRepos,
     loadingPRs,
+    preflighting,
     decoding,
+    preflight,
     error,
     fetchWorkspaces,
     selectWorkspace,
     selectRepo,
     selectPR,
+    runPreflight,
+    runPreflightFromUrl,
     decode,
     decodeFromUrl,
+    clearPreflight,
   } = useDecodeStore();
 
   const router = useRouter();
@@ -39,6 +44,24 @@ export function PRPicker() {
   );
 
   const handleDecode = async () => {
+    // Run preflight first
+    let result;
+    if (mode === "url" && prUrl) {
+      result = await runPreflightFromUrl(prUrl);
+    } else if (selectedWorkspace && selectedRepo && selectedPR) {
+      result = await runPreflight(selectedWorkspace, selectedRepo, selectedPR.id);
+    }
+    if (!result) return;
+
+    // If cached or small, proceed immediately
+    if (result.cached || !result.warning) {
+      await proceedWithDecode();
+    }
+    // Otherwise the preflight card will show, user must confirm
+  };
+
+  const proceedWithDecode = async () => {
+    clearPreflight();
     if (mode === "url" && prUrl) {
       await decodeFromUrl(prUrl);
       router.push("/decode/report");
@@ -350,10 +373,10 @@ export function PRPicker() {
           )}
 
           {/* Decode button */}
-          {selectedPR && (
+          {selectedPR && !preflight && (
             <button
               onClick={handleDecode}
-              disabled={decoding}
+              disabled={decoding || preflighting}
               style={{
                 padding: "12px 24px",
                 background: "var(--accent)",
@@ -362,15 +385,29 @@ export function PRPicker() {
                 fontSize: "13px",
                 borderRadius: "var(--radius-md)",
                 border: "none",
-                cursor: decoding ? "not-allowed" : "pointer",
-                opacity: decoding ? 0.5 : 1,
+                cursor: decoding || preflighting ? "not-allowed" : "pointer",
+                opacity: decoding || preflighting ? 0.5 : 1,
                 alignSelf: "flex-start",
               }}
             >
-              {decoding ? "Decoding..." : `Decode PR #${selectedPR.id}`}
+              {preflighting
+                ? "Checking size..."
+                : decoding
+                  ? "Decoding..."
+                  : `Decode PR #${selectedPR.id}`}
             </button>
           )}
         </div>
+      )}
+
+      {/* Preflight warning card */}
+      {preflight && !preflight.cached && preflight.warning && (
+        <PreflightCard
+          preflight={preflight}
+          onConfirm={proceedWithDecode}
+          onCancel={clearPreflight}
+          decoding={decoding}
+        />
       )}
 
       {error && (
@@ -385,6 +422,169 @@ export function PRPicker() {
           }}
         >
           {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreflightCard({
+  preflight,
+  onConfirm,
+  onCancel,
+  decoding,
+}: {
+  preflight: import("@/stores/decode-store").PreflightResult;
+  onConfirm: () => void;
+  onCancel: () => void;
+  decoding: boolean;
+}) {
+  const isLarge = preflight.warning === "large";
+  const borderColor = isLarge
+    ? "var(--coral)"
+    : "var(--orange)";
+  const bgColor = isLarge
+    ? "var(--coral-bg)"
+    : "var(--orange-bg)";
+
+  return (
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        border: `1px solid ${borderColor}`,
+        borderRadius: "var(--radius-xl)",
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          color: borderColor,
+          marginBottom: "12px",
+        }}
+      >
+        {isLarge ? "Very large PR" : "Large PR"} — estimated ~${preflight.estimatedCost?.toFixed(3)} AI cost
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: "12px",
+          marginBottom: "16px",
+        }}
+      >
+        <Stat
+          label="Files"
+          value={`${preflight.files?.included} of ${preflight.files?.total}`}
+          sub={
+            preflight.files?.excluded
+              ? `${preflight.files.excluded} filtered out`
+              : undefined
+          }
+        />
+        <Stat
+          label="Diff lines"
+          value={`${preflight.diff?.filteredLines.toLocaleString()}`}
+          sub={
+            preflight.diff?.reductionPercent
+              ? `${preflight.diff.reductionPercent}% reduced`
+              : undefined
+          }
+        />
+        <Stat
+          label="Est. tokens"
+          value={`~${Math.round((preflight.estimatedInputTokens || 0) / 1000)}k`}
+        />
+      </div>
+
+      {preflight.diff?.truncatedFiles && preflight.diff.truncatedFiles.length > 0 && (
+        <div
+          style={{
+            fontSize: "11px",
+            color: "var(--text-tertiary)",
+            marginBottom: "12px",
+          }}
+        >
+          Truncated:{" "}
+          {preflight.diff.truncatedFiles.map((f) => f.split("/").pop()).join(", ")}
+        </div>
+      )}
+
+      <div className="flex" style={{ gap: "10px" }}>
+        <button
+          onClick={onConfirm}
+          disabled={decoding}
+          style={{
+            padding: "10px 20px",
+            background: "var(--accent)",
+            color: "#fff",
+            fontWeight: 500,
+            fontSize: "12px",
+            borderRadius: "var(--radius-md)",
+            border: "none",
+            cursor: decoding ? "not-allowed" : "pointer",
+            opacity: decoding ? 0.5 : 1,
+          }}
+        >
+          {decoding ? "Decoding..." : "Proceed anyway"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={decoding}
+          style={{
+            padding: "10px 20px",
+            background: "transparent",
+            color: "var(--text-secondary)",
+            fontWeight: 500,
+            fontSize: "12px",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-default)",
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: "10px",
+          textTransform: "uppercase",
+          letterSpacing: "0.8px",
+          color: "var(--text-tertiary)",
+          marginBottom: "2px",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: "14px",
+          fontFamily: "var(--font-mono)",
+          color: "var(--text-primary)",
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: "10px", color: "var(--text-tertiary)", marginTop: "2px" }}>
+          {sub}
         </div>
       )}
     </div>
