@@ -578,7 +578,7 @@ export function DiffPanel({
               return (
                 <div key={i}>
                   <div
-                    className="flex group"
+                    className={`flex group${isCommentable ? " diff-line-hover" : ""}`}
                     style={{
                       background: rowBg[line.type],
                       minHeight: "20px",
