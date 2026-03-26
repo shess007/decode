@@ -18,13 +18,15 @@ export default function ReportPage() {
   const router = useRouter();
 
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [activeFile, setActiveFile] = useState<string | null>(null);
   const [diffFile, setDiffFile] = useState<string | null>(null);
   const [focusIndex, setFocusIndex] = useState<number>(-1);
   const mainRef = useRef<HTMLElement>(null);
 
   // Ordered list of all file paths in review order
   const allFiles = report?.reviewOrder.phases.flatMap((p) => p.files) ?? [];
+
+  // Sidebar highlight = whichever file's diff is shown in the 3rd column
+  const activeFile = diffFile;
 
   useEffect(() => {
     fetchSession();
@@ -35,34 +37,6 @@ export default function ReportPage() {
       router.push("/");
     }
   }, [loading, user, router]);
-
-  // Intersection observer for scroll sync
-  useEffect(() => {
-    if (!report || !mainRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const filePath = decodeURIComponent(
-              entry.target.id.replace("file-", "")
-            );
-            setActiveFile(filePath);
-          }
-        }
-      },
-      {
-        root: mainRef.current,
-        rootMargin: "-20% 0px -60% 0px",
-        threshold: 0,
-      }
-    );
-
-    const cards = mainRef.current.querySelectorAll("[id^='file-']");
-    cards.forEach((card) => observer.observe(card));
-
-    return () => observer.disconnect();
-  }, [report]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -142,7 +116,6 @@ export default function ReportPage() {
 
   const scrollToFile = useCallback(
     (filePath: string) => {
-      setActiveFile(filePath);
       setFocusIndex(allFiles.indexOf(filePath));
 
       // Expand if collapsed
@@ -153,7 +126,7 @@ export default function ReportPage() {
         return next;
       });
 
-      // Show diff
+      // Show diff in 3rd column (this also drives sidebar highlight)
       setDiffFile(filePath);
 
       // Scroll to card
@@ -161,7 +134,7 @@ export default function ReportPage() {
         `file-${encodeURIComponent(filePath)}`
       );
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     },
     [allFiles]

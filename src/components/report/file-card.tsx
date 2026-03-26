@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 import type { FileAnnotation } from "@/lib/types";
 import {
   changeTypeColor,
@@ -38,13 +38,6 @@ export function FileCard({
   const badgeText = changeTypeColor[annotation.changeType];
   const complexity = complexityConfig[annotation.complexity];
   const isTrivial = annotation.complexity === "trivial";
-
-  // Scroll into view when activated from sidebar
-  useEffect(() => {
-    if (isActive && cardRef.current) {
-      cardRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [isActive]);
 
   return (
     <div
