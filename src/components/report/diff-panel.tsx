@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { splitFilePath } from "./change-type-colors";
+import { splitFilePath, changeTypeColor, changeTypeBadgeBg, complexityConfig } from "./change-type-colors";
 import { useHighlighter, type TokenizedLine } from "@/lib/use-highlighter";
+import type { FileAnnotation } from "@/lib/types";
 
 interface DiffPanelProps {
   filePath: string | null;
   workspace: string;
   repo: string;
   prId: number;
+  annotation?: FileAnnotation | null;
   onPrev?: () => void;
   onNext?: () => void;
   currentIndex?: number;
@@ -35,6 +37,7 @@ function parseDiffLines(raw: string): DiffLine[] {
   let newLine = 0;
 
   for (const line of raw.split("\n")) {
+    // Skip git meta lines — not useful for reviewers
     if (
       line.startsWith("diff --git") ||
       line.startsWith("index ") ||
@@ -46,7 +49,6 @@ function parseDiffLines(raw: string): DiffLine[] {
       line.startsWith("similarity") ||
       line.startsWith("Binary")
     ) {
-      lines.push({ type: "meta", content: line });
       continue;
     }
 
@@ -307,6 +309,7 @@ export function DiffPanel({
   workspace,
   repo,
   prId,
+  annotation,
   onPrev,
   onNext,
   currentIndex,
@@ -520,6 +523,42 @@ export function DiffPanel({
             <span style={{ color: "var(--text-primary)" }}>{filename}</span>
             <span style={{ color: "var(--text-tertiary)", marginLeft: "4px", fontSize: "10px" }}>↗</span>
           </a>
+          {annotation && (
+            <>
+              <span
+                style={{
+                  fontSize: "9px",
+                  fontWeight: 600,
+                  padding: "2px 6px",
+                  borderRadius: "var(--radius-sm)",
+                  letterSpacing: "0.3px",
+                  textTransform: "lowercase",
+                  background: changeTypeBadgeBg[annotation.changeType],
+                  color: changeTypeColor[annotation.changeType],
+                  flexShrink: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {annotation.changeType}
+              </span>
+              <div className="flex items-center" style={{ gap: "2px", flexShrink: 0 }}>
+                {[0, 1, 2].map((j) => (
+                  <span
+                    key={j}
+                    style={{
+                      width: "3px",
+                      height: "10px",
+                      borderRadius: "1.5px",
+                      background:
+                        j < complexityConfig[annotation.complexity].bars
+                          ? complexityConfig[annotation.complexity].color
+                          : "var(--bg-muted)",
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
         {currentIndex !== undefined && totalFiles !== undefined && (
           <span

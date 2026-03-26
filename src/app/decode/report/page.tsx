@@ -269,6 +269,7 @@ export default function ReportPage() {
               workspace={reportContext.workspace}
               repo={reportContext.repo}
               prId={reportContext.prId}
+              annotation={activeFile ? report.fileAnnotations.find(a => a.filePath === activeFile) : null}
               onPrev={goToPrev}
               onNext={goToNext}
               currentIndex={activeIndex}

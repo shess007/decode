@@ -1,10 +1,8 @@
 "use client";
 
-import type { DecodeReport, FileAnnotation } from "@/lib/types";
+import type { DecodeReport } from "@/lib/types";
 import {
   changeTypeColor,
-  changeTypeBadgeBg,
-  complexityConfig,
   splitFilePath,
 } from "./change-type-colors";
 
@@ -39,9 +37,6 @@ export function ContextPanel({
       {/* File annotation section */}
       {activeFile && annotation ? (
         <div style={{ padding: "20px 16px", flex: 1, minHeight: 0, overflowY: "auto" }}>
-          {/* Currently viewing */}
-          <FileHeader filePath={activeFile} annotation={annotation} />
-
           {/* Role in this PR */}
           <Section label="Role in this PR">
             <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.55, margin: 0 }}>
@@ -180,79 +175,6 @@ export function ContextPanel({
   );
 }
 
-function FileHeader({
-  filePath,
-  annotation,
-}: {
-  filePath: string;
-  annotation: FileAnnotation;
-}) {
-  const { directory, filename } = splitFilePath(filePath);
-  const dotColor = changeTypeColor[annotation.changeType];
-  const badgeBg = changeTypeBadgeBg[annotation.changeType];
-  const badgeText = changeTypeColor[annotation.changeType];
-  const complexity = complexityConfig[annotation.complexity];
-
-  return (
-    <div style={{ marginBottom: "16px" }}>
-      <div
-        style={{
-          fontSize: "10px",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "1px",
-          color: "var(--text-tertiary)",
-          marginBottom: "6px",
-        }}
-      >
-        Currently viewing
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "11px",
-          fontWeight: 600,
-          marginBottom: "8px",
-        }}
-      >
-        <span style={{ color: "var(--text-tertiary)" }}>{directory}</span>
-        <span style={{ color: "var(--text-primary)" }}>{filename}</span>
-      </div>
-      <div className="flex items-center" style={{ gap: "8px" }}>
-        {/* Change type badge */}
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 600,
-            padding: "2px 7px",
-            borderRadius: "var(--radius-sm)",
-            letterSpacing: "0.3px",
-            textTransform: "lowercase",
-            background: badgeBg,
-            color: badgeText,
-          }}
-        >
-          {annotation.changeType}
-        </span>
-        {/* Complexity bars */}
-        <div className="flex items-center" style={{ gap: "2px" }}>
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              style={{
-                width: "4px",
-                height: "10px",
-                borderRadius: "2px",
-                background:
-                  i < complexity.bars ? complexity.color : "var(--bg-muted)",
-              }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Section({
   label,
