@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { splitFilePath } from "./change-type-colors";
 import { useHighlighter, type TokenizedLine } from "@/lib/use-highlighter";
 
@@ -20,6 +20,13 @@ interface DiffLine {
   content: string;
   oldNum?: number;
   newNum?: number;
+}
+
+interface PostedComment {
+  line: number;
+  lineType: "add" | "remove" | "context";
+  content: string;
+  commentId: number;
 }
 
 function parseDiffLines(raw: string): DiffLine[] {
@@ -60,11 +67,7 @@ function parseDiffLines(raw: string): DiffLine[] {
       lines.push({ type: "add", content: line.slice(1), newNum: newLine });
       newLine++;
     } else if (line.startsWith("-")) {
-      lines.push({
-        type: "remove",
-        content: line.slice(1),
-        oldNum: oldLine,
-      });
+      lines.push({ type: "remove", content: line.slice(1), oldNum: oldLine });
       oldLine++;
     } else {
       lines.push({
@@ -81,6 +84,12 @@ function parseDiffLines(raw: string): DiffLine[] {
   return lines;
 }
 
+function getLineKey(line: DiffLine): string | null {
+  if (line.type === "meta" || line.type === "header") return null;
+  const num = line.type === "remove" ? line.oldNum : line.newNum;
+  return num !== undefined ? `${line.type}:${num}` : null;
+}
+
 const rowBg: Record<DiffLine["type"], string> = {
   add: "rgba(52, 211, 153, 0.06)",
   remove: "rgba(240, 123, 110, 0.06)",
@@ -89,7 +98,6 @@ const rowBg: Record<DiffLine["type"], string> = {
   meta: "transparent",
 };
 
-/** Render a single line's content — either syntax-highlighted tokens or plain text */
 function LineContent({
   line,
   tokens,
@@ -105,10 +113,11 @@ function LineContent({
     minWidth: 0,
   };
 
-  // For meta/header lines, use plain styling
   if (line.type === "meta") {
     return (
-      <span style={{ ...style, color: "var(--text-tertiary)", fontStyle: "italic" }}>
+      <span
+        style={{ ...style, color: "var(--text-tertiary)", fontStyle: "italic" }}
+      >
         {line.content}
       </span>
     );
@@ -121,7 +130,6 @@ function LineContent({
     );
   }
 
-  // Syntax-highlighted tokens
   if (tokens) {
     return (
       <span style={style}>
@@ -141,7 +149,6 @@ function LineContent({
     );
   }
 
-  // Fallback: plain text with diff-type coloring
   const fallbackColor =
     line.type === "add"
       ? "var(--green)"
@@ -153,6 +160,147 @@ function LineContent({
     <span style={{ ...style, color: fallbackColor }}>{line.content}</span>
   );
 }
+
+// ── Inline comment input ────────────────────────────────────────
+
+function CommentInput({
+  onSubmit,
+  onCancel,
+  submitting,
+}: {
+  onSubmit: (content: string) => void;
+  onCancel: () => void;
+  submitting: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (value.trim()) onSubmit(value.trim());
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      style={{
+        padding: "8px 8px 8px 100px",
+        background: "var(--bg-elevated)",
+        borderTop: "1px solid var(--border-default)",
+        borderBottom: "1px solid var(--border-default)",
+      }}
+    >
+      <textarea
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Write a comment... (Cmd+Enter to submit, Esc to cancel)"
+        disabled={submitting}
+        rows={3}
+        style={{
+          width: "100%",
+          background: "var(--bg-muted)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-md)",
+          color: "var(--text-primary)",
+          fontSize: "12px",
+          fontFamily: "var(--font-sans)",
+          padding: "8px 10px",
+          resize: "vertical",
+          outline: "none",
+          lineHeight: 1.5,
+        }}
+        onFocus={(e) =>
+          (e.currentTarget.style.borderColor = "var(--accent)")
+        }
+        onBlur={(e) =>
+          (e.currentTarget.style.borderColor = "var(--border-default)")
+        }
+      />
+      <div
+        className="flex items-center justify-between"
+        style={{ marginTop: "6px" }}
+      >
+        <span style={{ fontSize: "10px", color: "var(--text-tertiary)" }}>
+          Cmd+Enter to submit · Esc to cancel
+        </span>
+        <div className="flex" style={{ gap: "6px" }}>
+          <button
+            onClick={onCancel}
+            disabled={submitting}
+            style={{
+              padding: "4px 12px",
+              fontSize: "11px",
+              color: "var(--text-secondary)",
+              background: "transparent",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => value.trim() && onSubmit(value.trim())}
+            disabled={submitting || !value.trim()}
+            style={{
+              padding: "4px 12px",
+              fontSize: "11px",
+              color: "#fff",
+              background: "var(--accent)",
+              border: "none",
+              borderRadius: "var(--radius-sm)",
+              cursor:
+                submitting || !value.trim() ? "not-allowed" : "pointer",
+              opacity: submitting || !value.trim() ? 0.5 : 1,
+            }}
+          >
+            {submitting ? "Posting..." : "Comment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Posted comment display ──────────────────────────────────────
+
+function PostedCommentBubble({ comment }: { comment: PostedComment }) {
+  return (
+    <div
+      style={{
+        padding: "6px 8px 6px 100px",
+        background: "var(--accent-dim)",
+        borderTop: "1px solid var(--border-default)",
+        borderBottom: "1px solid var(--border-default)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "11px",
+          color: "var(--text-primary)",
+          lineHeight: 1.5,
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        <span style={{ color: "var(--accent)", marginRight: "6px" }}>💬</span>
+        {comment.content}
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────
 
 export function DiffPanel({
   filePath,
@@ -167,6 +315,16 @@ export function DiffPanel({
   const [diff, setDiff] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commentingLineIdx, setCommentingLineIdx] = useState<number | null>(null);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [postedComments, setPostedComments] = useState<
+    Map<string, PostedComment[]>
+  >(new Map());
+
+  // Reset comment input when file changes
+  useEffect(() => {
+    setCommentingLineIdx(null);
+  }, [filePath]);
 
   useEffect(() => {
     if (!filePath) {
@@ -208,8 +366,6 @@ export function DiffPanel({
     [diff]
   );
 
-  // Extract just the code content lines for syntax highlighting
-  // (skip meta/header lines — they don't need highlighting)
   const codeLines = useMemo(
     () =>
       parsedLines.map((line) =>
@@ -219,6 +375,78 @@ export function DiffPanel({
   );
 
   const highlightedTokens = useHighlighter(codeLines, filePath);
+
+  const handleLineClick = useCallback(
+    (idx: number) => {
+      setCommentingLineIdx((prev) => (prev === idx ? null : idx));
+    },
+    []
+  );
+
+  const handleSubmitComment = useCallback(
+    async (content: string) => {
+      if (!filePath || commentingLineIdx === null) return;
+
+      const line = parsedLines[commentingLineIdx];
+      if (!line) return;
+
+      const lineType = line.type as "add" | "remove" | "context";
+      const lineNum = lineType === "remove" ? line.oldNum! : line.newNum!;
+
+      setSubmittingComment(true);
+
+      try {
+        const res = await fetch("/api/decode/comments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace,
+            repo,
+            prId,
+            filePath,
+            line: lineNum,
+            lineType,
+            content,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to post comment");
+        }
+
+        const data = await res.json();
+
+        // Store the posted comment
+        const comment: PostedComment = {
+          line: lineNum,
+          lineType: lineType as "add" | "remove" | "context",
+          content,
+          commentId: data.commentId,
+        };
+
+        setPostedComments((prev) => {
+          const next = new Map(prev);
+          const fileComments = next.get(filePath) || [];
+          next.set(filePath, [...fileComments, comment]);
+          return next;
+        });
+
+        setCommentingLineIdx(null);
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Failed to post comment");
+      } finally {
+        setSubmittingComment(false);
+      }
+    },
+    [filePath, commentingLineIdx, parsedLines, workspace, repo, prId]
+  );
+
+  // Get posted comments for current file
+  const filePosted = filePath ? postedComments.get(filePath) || [] : [];
+  const postedLineKeys = new Set(
+    filePosted.map((c) => `${c.lineType}:${c.line}`)
+  );
 
   // Empty state
   if (!filePath) {
@@ -231,7 +459,7 @@ export function DiffPanel({
           className="text-center"
           style={{ maxWidth: "180px", lineHeight: 1.6 }}
         >
-          Click a file card to view its diff
+          Select a file to view its diff
         </div>
       </div>
     );
@@ -251,17 +479,26 @@ export function DiffPanel({
           background: "var(--bg-surface)",
         }}
       >
-        <div className="flex items-center" style={{ gap: "8px", minWidth: 0, flex: 1 }}>
-          {/* Prev/Next */}
+        <div
+          className="flex items-center"
+          style={{ gap: "8px", minWidth: 0, flex: 1 }}
+        >
           <div className="flex" style={{ gap: "2px", flexShrink: 0 }}>
-            <NavButton onClick={onPrev} disabled={currentIndex === 0} label="‹" />
+            <NavButton
+              onClick={onPrev}
+              disabled={currentIndex === 0}
+              label="‹"
+            />
             <NavButton
               onClick={onNext}
-              disabled={currentIndex !== undefined && totalFiles !== undefined && currentIndex >= totalFiles - 1}
+              disabled={
+                currentIndex !== undefined &&
+                totalFiles !== undefined &&
+                currentIndex >= totalFiles - 1
+              }
               label="›"
             />
           </div>
-          {/* File path */}
           <span
             style={{
               fontFamily: "var(--font-mono)",
@@ -276,7 +513,6 @@ export function DiffPanel({
             <span style={{ color: "var(--text-primary)" }}>{filename}</span>
           </span>
         </div>
-        {/* File counter */}
         {currentIndex !== undefined && totalFiles !== undefined && (
           <span
             style={{
@@ -308,7 +544,9 @@ export function DiffPanel({
         )}
 
         {error && (
-          <div style={{ padding: "16px", color: "var(--coral)", fontSize: "12px" }}>
+          <div
+            style={{ padding: "16px", color: "var(--coral)", fontSize: "12px" }}
+          >
             {error}
           </div>
         )}
@@ -321,78 +559,135 @@ export function DiffPanel({
               lineHeight: 1.65,
             }}
           >
-            {parsedLines.map((line, i) => (
-              <div
-                key={i}
-                className="flex"
-                style={{
-                  background: rowBg[line.type],
-                  minHeight: "20px",
-                }}
-              >
-                {/* Line numbers */}
-                {line.type !== "meta" && line.type !== "header" && (
-                  <span
-                    className="flex-shrink-0"
-                    style={{
-                      width: "80px",
-                      padding: "0 8px",
-                      textAlign: "right",
-                      color: "var(--text-tertiary)",
-                      fontSize: "10px",
-                      userSelect: "none",
-                      display: "flex",
-                      gap: "4px",
-                      justifyContent: "flex-end",
-                      opacity: 0.6,
-                    }}
-                  >
-                    <span style={{ width: "32px", textAlign: "right" }}>
-                      {line.oldNum ?? ""}
-                    </span>
-                    <span style={{ width: "32px", textAlign: "right" }}>
-                      {line.newNum ?? ""}
-                    </span>
-                  </span>
-                )}
+            {parsedLines.map((line, i) => {
+              const lineKey = getLineKey(line);
+              const isCommentable =
+                line.type === "add" ||
+                line.type === "remove" ||
+                line.type === "context";
+              const hasComment = lineKey ? postedLineKeys.has(lineKey) : false;
+              const isCommenting = i === commentingLineIdx;
 
-                {/* Gutter indicator */}
-                {line.type !== "meta" && line.type !== "header" && (
-                  <span
-                    className="flex-shrink-0"
-                    style={{
-                      width: "20px",
-                      textAlign: "center",
-                      userSelect: "none",
-                      color:
-                        line.type === "add"
-                          ? "var(--green)"
-                          : line.type === "remove"
-                            ? "var(--coral)"
-                            : "transparent",
-                    }}
-                  >
-                    {line.type === "add"
-                      ? "+"
-                      : line.type === "remove"
-                        ? "-"
-                        : " "}
-                  </span>
-                )}
+              // Find posted comments for this line
+              const lineComments = lineKey
+                ? filePosted.filter(
+                    (c) => `${c.lineType}:${c.line}` === lineKey
+                  )
+                : [];
 
-                {/* Content — syntax highlighted or plain */}
-                <LineContent
-                  line={line}
-                  tokens={
-                    highlightedTokens &&
-                    line.type !== "meta" &&
-                    line.type !== "header"
-                      ? highlightedTokens[i] ?? null
-                      : null
-                  }
-                />
-              </div>
-            ))}
+              return (
+                <div key={i}>
+                  <div
+                    className="flex group"
+                    style={{
+                      background: rowBg[line.type],
+                      minHeight: "20px",
+                      position: "relative",
+                      cursor: isCommentable ? "pointer" : "default",
+                    }}
+                    onClick={() => isCommentable && handleLineClick(i)}
+                  >
+                    {/* Line numbers */}
+                    {line.type !== "meta" && line.type !== "header" && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{
+                          width: "80px",
+                          padding: "0 8px",
+                          textAlign: "right",
+                          color: "var(--text-tertiary)",
+                          fontSize: "10px",
+                          userSelect: "none",
+                          display: "flex",
+                          gap: "4px",
+                          justifyContent: "flex-end",
+                          opacity: 0.6,
+                        }}
+                      >
+                        <span style={{ width: "32px", textAlign: "right" }}>
+                          {line.oldNum ?? ""}
+                        </span>
+                        <span style={{ width: "32px", textAlign: "right" }}>
+                          {line.newNum ?? ""}
+                        </span>
+                      </span>
+                    )}
+
+                    {/* Gutter indicator + comment icon */}
+                    {line.type !== "meta" && line.type !== "header" && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{
+                          width: "20px",
+                          textAlign: "center",
+                          userSelect: "none",
+                          color: hasComment
+                            ? "var(--accent)"
+                            : line.type === "add"
+                              ? "var(--green)"
+                              : line.type === "remove"
+                                ? "var(--coral)"
+                                : "transparent",
+                        }}
+                      >
+                        {hasComment
+                          ? "💬"
+                          : line.type === "add"
+                            ? "+"
+                            : line.type === "remove"
+                              ? "-"
+                              : " "}
+                      </span>
+                    )}
+
+                    {/* Content */}
+                    <LineContent
+                      line={line}
+                      tokens={
+                        highlightedTokens &&
+                        line.type !== "meta" &&
+                        line.type !== "header"
+                          ? highlightedTokens[i] ?? null
+                          : null
+                      }
+                    />
+
+                    {/* Hover comment button */}
+                    {isCommentable && !hasComment && (
+                      <span
+                        className="opacity-0 group-hover:opacity-100"
+                        style={{
+                          position: "absolute",
+                          right: "8px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          fontSize: "10px",
+                          color: "var(--accent)",
+                          transition: "opacity var(--transition-fast)",
+                          pointerEvents: "none",
+                        }}
+                      >
+                        +
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Posted comments on this line */}
+                  {lineComments.map((c) => (
+                    <PostedCommentBubble key={c.commentId} comment={c} />
+                  ))}
+
+                  {/* Comment input */}
+                  {isCommenting && (
+                    <CommentInput
+                      onSubmit={handleSubmitComment}
+                      onCancel={() => setCommentingLineIdx(null)}
+                      submitting={submittingComment}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -429,7 +724,8 @@ function NavButton({
         transition: "all var(--transition-fast)",
       }}
       onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.background = "var(--bg-elevated)";
+        if (!disabled)
+          e.currentTarget.style.background = "var(--bg-elevated)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = "transparent";
