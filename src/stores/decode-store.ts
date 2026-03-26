@@ -50,6 +50,9 @@ interface DecodeState {
   // Preflight
   preflight: PreflightResult | null;
 
+  // Local decode
+  waitingForLocal: boolean;
+
   // Report + its context (always set alongside report)
   report: DecodeReport | null;
   reportContext: { workspace: string; repo: string; prId: number } | null;
@@ -66,6 +69,10 @@ interface DecodeState {
   runPreflightFromUrl: (url: string) => Promise<PreflightResult | null>;
   decode: (workspace: string, repo: string, prId: number) => Promise<void>;
   decodeFromUrl: (url: string) => Promise<void>;
+  decodeLocal: (workspace: string, repo: string, prId: number) => Promise<void>;
+  decodeLocalFromUrl: (url: string) => Promise<void>;
+  pollForReport: (workspace: string, repo: string, prId: number) => void;
+  stopPolling: () => void;
   clearPreflight: () => void;
   reset: () => void;
 }
@@ -83,6 +90,7 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
   preflighting: false,
   decoding: false,
   preflight: null,
+  waitingForLocal: false,
   report: null,
   reportContext: null,
   error: null,
@@ -253,7 +261,92 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
     }
   },
 
+  decodeLocal: async (workspace: string, repo: string, prId: number) => {
+    set({ waitingForLocal: true, report: null, error: null, preflight: null });
+    try {
+      const res = await fetch("/api/decode/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace, repo, prId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Prepare failed");
+      }
+      const data = await res.json();
+      if (data.status === "cached") {
+        // Already cached, just fetch it
+        const statusRes = await fetch(
+          `/api/decode/status?workspace=${workspace}&repo=${repo}&prId=${prId}`
+        );
+        const statusData = await statusRes.json();
+        if (statusData.status === "ready") {
+          set({
+            report: statusData.report,
+            reportContext: { workspace, repo, prId },
+            waitingForLocal: false,
+          });
+          return;
+        }
+      }
+      // Start polling
+      set({ reportContext: { workspace, repo, prId } });
+      get().pollForReport(workspace, repo, prId);
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : "Prepare failed",
+        waitingForLocal: false,
+      });
+    }
+  },
+
+  decodeLocalFromUrl: async (url: string) => {
+    const match = url.match(/bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)/);
+    if (!match) {
+      set({ error: "Invalid Bitbucket PR URL" });
+      return;
+    }
+    const workspace = match[1];
+    const repo = match[2];
+    const prId = parseInt(match[3], 10);
+    await get().decodeLocal(workspace, repo, prId);
+  },
+
+  pollForReport: (workspace: string, repo: string, prId: number) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/decode/status?workspace=${workspace}&repo=${repo}&prId=${prId}`
+        );
+        const data = await res.json();
+        if (data.status === "ready") {
+          clearInterval(interval);
+          set({
+            report: data.report,
+            reportContext: { workspace, repo, prId },
+            waitingForLocal: false,
+          });
+        }
+      } catch {
+        // ignore poll errors, keep trying
+      }
+    }, 2000);
+
+    // Store interval ID for cleanup
+    (globalThis as Record<string, unknown>).__decodePollInterval = interval;
+  },
+
+  stopPolling: () => {
+    const interval = (globalThis as Record<string, unknown>).__decodePollInterval;
+    if (interval) {
+      clearInterval(interval as ReturnType<typeof setInterval>);
+      (globalThis as Record<string, unknown>).__decodePollInterval = undefined;
+    }
+    set({ waitingForLocal: false });
+  },
+
   reset: () => {
+    get().stopPolling();
     set({
       selectedWorkspace: null,
       selectedRepo: null,
@@ -262,6 +355,8 @@ export const useDecodeStore = create<DecodeState>((set, get) => ({
       pullRequests: [],
       report: null,
       reportContext: null,
+      waitingForLocal: false,
+      preflight: null,
       error: null,
     });
   },

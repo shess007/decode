@@ -23,10 +23,13 @@ export function PRPicker() {
     selectWorkspace,
     selectRepo,
     selectPR,
+    waitingForLocal,
     runPreflight,
     runPreflightFromUrl,
     decode,
     decodeFromUrl,
+    decodeLocal,
+    decodeLocalFromUrl,
     clearPreflight,
   } = useDecodeStore();
 
@@ -69,6 +72,15 @@ export function PRPicker() {
       await decode(selectedWorkspace, selectedRepo, selectedPR.id);
       router.push("/decode/report");
     }
+  };
+
+  const handleLocalDecode = async () => {
+    if (mode === "url" && prUrl) {
+      await decodeLocalFromUrl(prUrl);
+    } else if (selectedWorkspace && selectedRepo && selectedPR) {
+      await decodeLocal(selectedWorkspace, selectedRepo, selectedPR.id);
+    }
+    router.push("/decode/report");
   };
 
   const inputStyle = {
@@ -147,24 +159,42 @@ export function PRPicker() {
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
           />
-          <button
-            onClick={handleDecode}
-            disabled={!prUrl || decoding}
-            style={{
-              padding: "12px 24px",
-              background: "var(--accent)",
-              color: "#fff",
-              fontWeight: 500,
-              fontSize: "13px",
-              borderRadius: "var(--radius-md)",
-              border: "none",
-              cursor: !prUrl || decoding ? "not-allowed" : "pointer",
-              opacity: !prUrl || decoding ? 0.5 : 1,
-              alignSelf: "flex-start",
-            }}
-          >
-            {decoding ? "Decoding..." : "Decode this PR"}
-          </button>
+          <div className="flex" style={{ gap: "10px" }}>
+            <button
+              onClick={handleDecode}
+              disabled={!prUrl || decoding || preflighting}
+              style={{
+                padding: "12px 24px",
+                background: "var(--accent)",
+                color: "#fff",
+                fontWeight: 500,
+                fontSize: "13px",
+                borderRadius: "var(--radius-md)",
+                border: "none",
+                cursor: !prUrl || decoding || preflighting ? "not-allowed" : "pointer",
+                opacity: !prUrl || decoding || preflighting ? 0.5 : 1,
+              }}
+            >
+              {preflighting ? "Checking..." : decoding ? "Decoding..." : "Decode (AI)"}
+            </button>
+            <button
+              onClick={handleLocalDecode}
+              disabled={!prUrl || waitingForLocal}
+              style={{
+                padding: "12px 24px",
+                background: "transparent",
+                color: "var(--text-secondary)",
+                fontWeight: 500,
+                fontSize: "13px",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-default)",
+                cursor: !prUrl || waitingForLocal ? "not-allowed" : "pointer",
+                opacity: !prUrl || waitingForLocal ? 0.5 : 1,
+              }}
+            >
+              {waitingForLocal ? "Preparing..." : "Decode (free)"}
+            </button>
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -372,30 +402,48 @@ export function PRPicker() {
             </div>
           )}
 
-          {/* Decode button */}
+          {/* Decode buttons */}
           {selectedPR && !preflight && (
-            <button
-              onClick={handleDecode}
-              disabled={decoding || preflighting}
-              style={{
-                padding: "12px 24px",
-                background: "var(--accent)",
-                color: "#fff",
-                fontWeight: 500,
-                fontSize: "13px",
-                borderRadius: "var(--radius-md)",
-                border: "none",
-                cursor: decoding || preflighting ? "not-allowed" : "pointer",
-                opacity: decoding || preflighting ? 0.5 : 1,
-                alignSelf: "flex-start",
-              }}
-            >
-              {preflighting
-                ? "Checking size..."
-                : decoding
-                  ? "Decoding..."
-                  : `Decode PR #${selectedPR.id}`}
-            </button>
+            <div className="flex" style={{ gap: "10px" }}>
+              <button
+                onClick={handleDecode}
+                disabled={decoding || preflighting}
+                style={{
+                  padding: "12px 24px",
+                  background: "var(--accent)",
+                  color: "#fff",
+                  fontWeight: 500,
+                  fontSize: "13px",
+                  borderRadius: "var(--radius-md)",
+                  border: "none",
+                  cursor: decoding || preflighting ? "not-allowed" : "pointer",
+                  opacity: decoding || preflighting ? 0.5 : 1,
+                }}
+              >
+                {preflighting
+                  ? "Checking..."
+                  : decoding
+                    ? "Decoding..."
+                    : `Decode (AI)`}
+              </button>
+              <button
+                onClick={handleLocalDecode}
+                disabled={waitingForLocal}
+                style={{
+                  padding: "12px 24px",
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  fontWeight: 500,
+                  fontSize: "13px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-default)",
+                  cursor: waitingForLocal ? "not-allowed" : "pointer",
+                  opacity: waitingForLocal ? 0.5 : 1,
+                }}
+              >
+                {waitingForLocal ? "Preparing..." : "Decode (free)"}
+              </button>
+            </div>
           )}
         </div>
       )}

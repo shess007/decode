@@ -12,7 +12,7 @@ import { FileCard } from "@/components/report/file-card";
 import { DiffPanel } from "@/components/report/diff-panel";
 
 export default function ReportPage() {
-  const { report, reportContext, selectedPR, selectedWorkspace, selectedRepo, decoding, error } =
+  const { report, reportContext, selectedPR, selectedWorkspace, selectedRepo, decoding, waitingForLocal, error } =
     useDecodeStore();
   const { user, loading, fetchSession } = useAuthStore();
   const router = useRouter();
@@ -182,12 +182,12 @@ export default function ReportPage() {
   };
 
   // Loading state
-  if (loading || decoding) {
+  if (loading || decoding || waitingForLocal) {
     return (
       <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-base)" }}>
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center" style={{ color: "var(--text-secondary)" }}>
+          <div className="text-center" style={{ color: "var(--text-secondary)", maxWidth: "320px" }}>
             <div
               style={{
                 width: "32px",
@@ -200,7 +200,16 @@ export default function ReportPage() {
               }}
             />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <p>Analyzing pull request...</p>
+            {waitingForLocal ? (
+              <>
+                <p style={{ marginBottom: "8px" }}>PR data prepared. Waiting for local processing...</p>
+                <p style={{ fontSize: "12px", color: "var(--text-tertiary)", lineHeight: 1.5 }}>
+                  Ask Claude Code: <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)" }}>&quot;process pending decodes&quot;</span>
+                </p>
+              </>
+            ) : (
+              <p>Analyzing pull request...</p>
+            )}
           </div>
         </div>
       </div>
