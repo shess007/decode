@@ -25,6 +25,14 @@ export default function ReportPage() {
 
   // Active file = the file shown in diff + context panel
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [prMeta, setPrMeta] = useState<{
+    title: string;
+    author: string;
+    authorAvatar: string;
+    sourceBranch: string;
+    destinationBranch: string;
+    createdOn: string;
+  } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // Ordered list of all file paths in review order
@@ -37,6 +45,30 @@ export default function ReportPage() {
       setActiveFile(allFiles[0]);
     }
   }, [report, allFiles, activeFile]);
+
+  // Fetch PR metadata if not available from store
+  useEffect(() => {
+    if (selectedPR || !reportContext) return;
+    if (prMeta) return;
+
+    fetch(
+      `/api/bitbucket?path=/repositories/${reportContext.workspace}/${reportContext.repo}/pullrequests/${reportContext.prId}`
+    )
+      .then((res) => res.json())
+      .then((pr) => {
+        if (pr.title) {
+          setPrMeta({
+            title: pr.title,
+            author: pr.author?.display_name || "",
+            authorAvatar: pr.author?.links?.avatar?.href || "",
+            sourceBranch: pr.source?.branch?.name || "",
+            destinationBranch: pr.destination?.branch?.name || "",
+            createdOn: pr.created_on || "",
+          });
+        }
+      })
+      .catch(() => {});
+  }, [selectedPR, reportContext, prMeta]);
 
   useEffect(() => {
     fetchSession();
@@ -235,7 +267,12 @@ export default function ReportPage() {
         workspace={reportContext?.workspace ?? selectedWorkspace ?? undefined}
         repo={reportContext?.repo ?? selectedRepo ?? undefined}
         prId={reportContext?.prId ?? selectedPR?.id}
-        prTitle={selectedPR?.title}
+        prTitle={selectedPR?.title ?? prMeta?.title}
+        prAuthor={selectedPR?.author.display_name ?? prMeta?.author}
+        prAuthorAvatar={selectedPR?.author.links?.avatar?.href ?? prMeta?.authorAvatar}
+        sourceBranch={selectedPR?.source.branch.name ?? prMeta?.sourceBranch}
+        destinationBranch={selectedPR?.destination.branch.name ?? prMeta?.destinationBranch}
+        createdOn={selectedPR?.created_on ?? prMeta?.createdOn}
       />
 
       <div
