@@ -9,6 +9,10 @@ interface DiffPanelProps {
   workspace: string;
   repo: string;
   prId: number;
+  onPrev?: () => void;
+  onNext?: () => void;
+  currentIndex?: number;
+  totalFiles?: number;
 }
 
 interface DiffLine {
@@ -155,6 +159,10 @@ export function DiffPanel({
   workspace,
   repo,
   prId,
+  onPrev,
+  onNext,
+  currentIndex,
+  totalFiles,
 }: DiffPanelProps) {
   const [diff, setDiff] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -233,18 +241,55 @@ export function DiffPanel({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Navigation bar */}
       <div
+        className="flex items-center justify-between"
         style={{
-          padding: "10px 16px",
+          padding: "8px 12px",
           borderBottom: "1px solid var(--border-default)",
-          fontSize: "12px",
-          fontFamily: "var(--font-mono)",
           flexShrink: 0,
+          background: "var(--bg-surface)",
         }}
       >
-        <span style={{ color: "var(--text-tertiary)" }}>{directory}</span>
-        <span style={{ color: "var(--text-primary)" }}>{filename}</span>
+        <div className="flex items-center" style={{ gap: "8px", minWidth: 0, flex: 1 }}>
+          {/* Prev/Next */}
+          <div className="flex" style={{ gap: "2px", flexShrink: 0 }}>
+            <NavButton onClick={onPrev} disabled={currentIndex === 0} label="‹" />
+            <NavButton
+              onClick={onNext}
+              disabled={currentIndex !== undefined && totalFiles !== undefined && currentIndex >= totalFiles - 1}
+              label="›"
+            />
+          </div>
+          {/* File path */}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}
+          >
+            <span style={{ color: "var(--text-tertiary)" }}>{directory}</span>
+            <span style={{ color: "var(--text-primary)" }}>{filename}</span>
+          </span>
+        </div>
+        {/* File counter */}
+        {currentIndex !== undefined && totalFiles !== undefined && (
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              color: "var(--text-tertiary)",
+              flexShrink: 0,
+              marginLeft: "8px",
+            }}
+          >
+            {currentIndex + 1}/{totalFiles}
+          </span>
+        )}
       </div>
 
       {/* Content */}
@@ -352,5 +397,45 @@ export function DiffPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function NavButton({
+  onClick,
+  disabled,
+  label,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: "24px",
+        height: "24px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "var(--radius-sm)",
+        border: "1px solid var(--border-default)",
+        background: "transparent",
+        color: disabled ? "var(--text-tertiary)" : "var(--text-secondary)",
+        cursor: disabled ? "default" : "pointer",
+        fontSize: "14px",
+        opacity: disabled ? 0.4 : 1,
+        transition: "all var(--transition-fast)",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = "var(--bg-elevated)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      {label}
+    </button>
   );
 }

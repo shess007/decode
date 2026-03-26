@@ -22,28 +22,56 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
       style={{
         background: "var(--bg-surface)",
         borderRight: "1px solid var(--border-default)",
-        position: "sticky",
-        top: 0,
-        height: "100vh",
         overflowY: "auto",
-        padding: "20px 0",
-        width: "260px",
-        flexShrink: 0,
+        padding: "16px 0",
       }}
     >
-      {/* Logo */}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "14px",
-          color: "var(--accent)",
-          letterSpacing: "-0.5px",
-          opacity: 0.9,
-          padding: "0 20px 20px",
-        }}
-      >
-        {"{decode}"}
+      {/* PR Overview */}
+      <div style={{ padding: "0 16px 16px" }}>
+        <div
+          style={{
+            fontSize: "10px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "1.2px",
+            color: "var(--text-tertiary)",
+            marginBottom: "8px",
+          }}
+        >
+          PR Overview
+        </div>
+        <p
+          style={{
+            fontSize: "11.5px",
+            color: "var(--text-secondary)",
+            lineHeight: 1.55,
+            margin: "0 0 8px",
+          }}
+        >
+          {truncateToSentences(report.overview.goal, 2)}
+        </p>
+        {report.overview.keyDecisions.length > 0 && (
+          <div className="flex flex-wrap" style={{ gap: "4px" }}>
+            {report.overview.keyDecisions.slice(0, 4).map((d, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: "9px",
+                  background: "var(--bg-muted)",
+                  color: "var(--text-secondary)",
+                  padding: "2px 7px",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border-default)",
+                }}
+              >
+                {d}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+
+      <div style={{ borderTop: "1px solid var(--border-default)", marginBottom: "12px" }} />
 
       {/* Review Order */}
       <div style={{ padding: "0 12px" }}>
@@ -195,4 +223,9 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
       )}
     </aside>
   );
+}
+
+function truncateToSentences(text: string, max: number): string {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  return sentences.slice(0, max).join(" ");
 }

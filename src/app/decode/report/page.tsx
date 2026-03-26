@@ -6,27 +6,37 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { TopBar } from "@/components/report/topbar";
 import { Sidebar } from "@/components/report/sidebar";
-import { OverviewCard } from "@/components/report/overview-card";
-import { PhaseHeader } from "@/components/report/phase-header";
-import { FileCard } from "@/components/report/file-card";
 import { DiffPanel } from "@/components/report/diff-panel";
+import { ContextPanel } from "@/components/report/context-panel";
 
 export default function ReportPage() {
-  const { report, reportContext, selectedPR, selectedWorkspace, selectedRepo, decoding, waitingForLocal, error } =
-    useDecodeStore();
+  const {
+    report,
+    reportContext,
+    selectedPR,
+    selectedWorkspace,
+    selectedRepo,
+    decoding,
+    waitingForLocal,
+    error,
+  } = useDecodeStore();
   const { user, loading, fetchSession } = useAuthStore();
   const router = useRouter();
 
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [diffFile, setDiffFile] = useState<string | null>(null);
-  const [focusIndex, setFocusIndex] = useState<number>(-1);
+  // Active file = the file shown in diff + context panel
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // Ordered list of all file paths in review order
   const allFiles = report?.reviewOrder.phases.flatMap((p) => p.files) ?? [];
+  const activeIndex = activeFile ? allFiles.indexOf(activeFile) : -1;
 
-  // Sidebar highlight = whichever file's diff is shown in the 3rd column
-  const activeFile = diffFile;
+  // Auto-select first file when report loads
+  useEffect(() => {
+    if (report && allFiles.length > 0 && !activeFile) {
+      setActiveFile(allFiles[0]);
+    }
+  }, [report, allFiles, activeFile]);
 
   useEffect(() => {
     fetchSession();
@@ -37,6 +47,25 @@ export default function ReportPage() {
       router.push("/");
     }
   }, [loading, user, router]);
+
+  const navigateToFile = useCallback(
+    (filePath: string) => {
+      setActiveFile(filePath);
+    },
+    []
+  );
+
+  const goToPrev = useCallback(() => {
+    if (activeIndex > 0) {
+      setActiveFile(allFiles[activeIndex - 1]);
+    }
+  }, [activeIndex, allFiles]);
+
+  const goToNext = useCallback(() => {
+    if (activeIndex < allFiles.length - 1) {
+      setActiveFile(allFiles[activeIndex + 1]);
+    }
+  }, [activeIndex, allFiles]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -52,39 +81,22 @@ export default function ReportPage() {
       switch (e.key) {
         case "j": {
           e.preventDefault();
-          const next = Math.min(focusIndex + 1, allFiles.length - 1);
-          setFocusIndex(next);
-          scrollToFile(allFiles[next]);
+          goToNext();
           break;
         }
         case "k": {
           e.preventDefault();
-          const prev = Math.max(focusIndex - 1, 0);
-          setFocusIndex(prev);
-          scrollToFile(allFiles[prev]);
-          break;
-        }
-        case "Enter":
-        case " ": {
-          if (focusIndex >= 0 && focusIndex < allFiles.length) {
-            e.preventDefault();
-            toggleExpand(allFiles[focusIndex]);
-          }
-          break;
-        }
-        case "Escape": {
-          e.preventDefault();
-          setExpandedFiles(new Set());
-          setDiffFile(null);
+          goToPrev();
           break;
         }
         default: {
+          // 1–9 jump to phase
           const num = parseInt(e.key, 10);
           if (num >= 1 && num <= report.reviewOrder.phases.length) {
             e.preventDefault();
             const phase = report.reviewOrder.phases[num - 1];
             if (phase.files.length > 0) {
-              scrollToFile(phase.files[0]);
+              setActiveFile(phase.files[0]);
             }
           }
         }
@@ -93,74 +105,21 @@ export default function ReportPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [report, focusIndex, allFiles]);
-
-  const toggleExpand = useCallback(
-    (filePath: string) => {
-      setExpandedFiles((prev) => {
-        const next = new Set(prev);
-        if (next.has(filePath)) {
-          next.delete(filePath);
-          // If collapsing the file whose diff is shown, clear the diff
-          if (diffFile === filePath) setDiffFile(null);
-        } else {
-          next.add(filePath);
-          // Show diff when expanding
-          setDiffFile(filePath);
-        }
-        return next;
-      });
-    },
-    [diffFile]
-  );
-
-  const scrollToFile = useCallback(
-    (filePath: string) => {
-      setFocusIndex(allFiles.indexOf(filePath));
-
-      // Expand if collapsed
-      setExpandedFiles((prev) => {
-        if (prev.has(filePath)) return prev;
-        const next = new Set(prev);
-        next.add(filePath);
-        return next;
-      });
-
-      // Show diff in 3rd column (this also drives sidebar highlight)
-      setDiffFile(filePath);
-
-      // Scroll to card
-      const el = document.getElementById(
-        `file-${encodeURIComponent(filePath)}`
-      );
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    },
-    [allFiles]
-  );
-
-  const toggleAll = useCallback(() => {
-    if (expandedFiles.size === allFiles.length) {
-      setExpandedFiles(new Set());
-      setDiffFile(null);
-    } else {
-      setExpandedFiles(new Set(allFiles));
-    }
-  }, [expandedFiles, allFiles]);
-
-  const buildBitbucketUrl = (filePath: string) => {
-    if (!reportContext) return undefined;
-    return `https://bitbucket.org/${reportContext.workspace}/${reportContext.repo}/pull-requests/${reportContext.prId}/diff#chg-${filePath}`;
-  };
+  }, [report, goToNext, goToPrev]);
 
   // Loading state
   if (loading || decoding || waitingForLocal) {
     return (
-      <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-base)" }}>
+      <div
+        className="flex flex-col min-h-screen"
+        style={{ background: "var(--bg-base)" }}
+      >
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center" style={{ color: "var(--text-secondary)", maxWidth: "320px" }}>
+          <div
+            className="text-center"
+            style={{ color: "var(--text-secondary)", maxWidth: "320px" }}
+          >
             <div
               style={{
                 width: "32px",
@@ -175,9 +134,25 @@ export default function ReportPage() {
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             {waitingForLocal ? (
               <>
-                <p style={{ marginBottom: "8px" }}>PR data prepared. Waiting for local processing...</p>
-                <p style={{ fontSize: "12px", color: "var(--text-tertiary)", lineHeight: 1.5 }}>
-                  Ask Claude Code: <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)" }}>&quot;process pending decodes&quot;</span>
+                <p style={{ marginBottom: "8px" }}>
+                  PR data prepared. Waiting for local processing...
+                </p>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--text-tertiary)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Ask Claude Code:{" "}
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    &quot;process pending decodes&quot;
+                  </span>
                 </p>
               </>
             ) : (
@@ -192,14 +167,25 @@ export default function ReportPage() {
   // Error state
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-base)" }}>
+      <div
+        className="flex flex-col min-h-screen"
+        style={{ background: "var(--bg-base)" }}
+      >
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p style={{ color: "var(--coral)", marginBottom: "16px" }}>{error}</p>
+            <p style={{ color: "var(--coral)", marginBottom: "16px" }}>
+              {error}
+            </p>
             <button
               onClick={() => router.push("/dashboard")}
-              style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontSize: "13px" }}
+              style={{
+                color: "var(--accent)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
             >
               Back to dashboard
             </button>
@@ -212,14 +198,25 @@ export default function ReportPage() {
   // No report
   if (!report) {
     return (
-      <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-base)" }}>
+      <div
+        className="flex flex-col min-h-screen"
+        style={{ background: "var(--bg-base)" }}
+      >
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>No report loaded.</p>
+            <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+              No report loaded.
+            </p>
             <button
               onClick={() => router.push("/dashboard")}
-              style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontSize: "13px" }}
+              style={{
+                color: "var(--accent)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
             >
               Back to dashboard
             </button>
@@ -229,15 +226,11 @@ export default function ReportPage() {
     );
   }
 
-  // Build annotation lookup
-  const annotationMap = new Map(
-    report.fileAnnotations.map((a) => [a.filePath, a])
-  );
-
-  const hasDiffPanel = diffFile !== null && reportContext !== null;
-
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "var(--bg-base)" }}>
+    <div
+      className="flex flex-col"
+      style={{ background: "var(--bg-base)", height: "100vh" }}
+    >
       <TopBar
         workspace={reportContext?.workspace ?? selectedWorkspace ?? undefined}
         repo={reportContext?.repo ?? selectedRepo ?? undefined}
@@ -248,165 +241,55 @@ export default function ReportPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: hasDiffPanel
-            ? "260px minmax(0, 1fr) minmax(300px, 1fr)"
-            : "260px minmax(0, 1fr)",
+          gridTemplateColumns: "280px 1fr 360px",
           flex: 1,
-          transition: "grid-template-columns var(--transition-normal)",
+          overflow: "hidden",
         }}
       >
+        {/* Column 1: Review order sidebar */}
         <Sidebar
           report={report}
           activeFile={activeFile}
-          onFileClick={scrollToFile}
+          onFileClick={navigateToFile}
         />
 
-        <main
-          ref={mainRef}
+        {/* Column 2: Diff viewer (hero) */}
+        <div
+          ref={mainRef as React.RefObject<HTMLDivElement>}
           style={{
-            padding: "32px 40px",
-            overflowY: "auto",
-            height: "calc(100vh - 49px)",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid var(--border-default)",
           }}
         >
-          <OverviewCard
-            overview={report.overview}
-            author={selectedPR?.author.display_name}
-            fileCount={report.fileAnnotations.length}
-          />
-
-          {/* Expand/Collapse all toggle */}
-          <div className="flex justify-end" style={{ marginBottom: "8px" }}>
-            <button
-              onClick={toggleAll}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "11px",
-                color: "var(--accent)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                opacity: 0.8,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.8")}
-            >
-              {expandedFiles.size === allFiles.length
-                ? "Collapse all"
-                : "Expand all"}
-            </button>
-          </div>
-
-          {report.reviewOrder.phases.map((phase, phaseIndex) => (
-            <div key={phaseIndex}>
-              <PhaseHeader number={phaseIndex + 1} label={phase.label} />
-
-              {phase.files.map((filePath) => {
-                const annotation = annotationMap.get(filePath);
-                if (!annotation) return null;
-
-                return (
-                  <FileCard
-                    key={filePath}
-                    filePath={filePath}
-                    annotation={annotation}
-                    isExpanded={expandedFiles.has(filePath)}
-                    isActive={activeFile === filePath}
-                    onToggle={() => toggleExpand(filePath)}
-                    bitbucketUrl={buildBitbucketUrl(filePath)}
-                  />
-                );
-              })}
-            </div>
-          ))}
-
-          {/* Review order reasoning */}
-          <div
-            style={{
-              marginTop: "40px",
-              paddingTop: "20px",
-              borderTop: "1px solid var(--border-default)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "10px",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "1.2px",
-                color: "var(--text-tertiary)",
-                marginBottom: "8px",
-              }}
-            >
-              Why This Order
-            </div>
-            <p
-              style={{
-                fontSize: "12px",
-                color: "var(--text-secondary)",
-                lineHeight: 1.6,
-                margin: 0,
-              }}
-            >
-              {report.reviewOrder.reasoning}
-            </p>
-          </div>
-        </main>
-
-        {/* Diff Panel — third column */}
-        {hasDiffPanel && (
-          <div
-            style={{
-              borderLeft: "1px solid var(--border-default)",
-              background: "var(--bg-surface)",
-              height: "calc(100vh - 49px)",
-              position: "sticky",
-              top: "49px",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Close button */}
-            <div
-              style={{
-                position: "absolute",
-                top: "8px",
-                right: "12px",
-                zIndex: 10,
-              }}
-            >
-              <button
-                onClick={() => setDiffFile(null)}
-                style={{
-                  background: "var(--bg-muted)",
-                  border: "none",
-                  borderRadius: "var(--radius-sm)",
-                  color: "var(--text-tertiary)",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  padding: "2px 8px",
-                  transition: "color var(--transition-fast)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = "var(--text-primary)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = "var(--text-tertiary)")
-                }
-              >
-                ✕
-              </button>
-            </div>
-
+          {reportContext ? (
             <DiffPanel
-              filePath={diffFile}
-              workspace={reportContext!.workspace}
-              repo={reportContext!.repo}
-              prId={reportContext!.prId}
+              filePath={activeFile}
+              workspace={reportContext.workspace}
+              repo={reportContext.repo}
+              prId={reportContext.prId}
+              onPrev={goToPrev}
+              onNext={goToNext}
+              currentIndex={activeIndex}
+              totalFiles={allFiles.length}
             />
-          </div>
-        )}
+          ) : (
+            <div
+              className="flex items-center justify-center flex-1"
+              style={{ color: "var(--text-tertiary)", fontSize: "12px" }}
+            >
+              No PR context available for diff loading
+            </div>
+          )}
+        </div>
+
+        {/* Column 3: Context panel */}
+        <ContextPanel
+          report={report}
+          activeFile={activeFile}
+          onFileClick={navigateToFile}
+        />
       </div>
     </div>
   );
