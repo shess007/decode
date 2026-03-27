@@ -44,12 +44,12 @@ export function ContextPanel({
           {/* What changed — mini-card, skip for trivial */}
           {annotation.complexity !== "trivial" && annotation.whatChanged && (
             <MiniCard label="What changed">
-              <BulletText text={annotation.whatChanged} />
+              <BulletList items={toArray(annotation.whatChanged)} />
             </MiniCard>
           )}
 
           {/* Attention callout — elevated card */}
-          {annotation.payAttentionTo && annotation.payAttentionTo.trim() !== "" && (
+          {annotation.payAttentionTo && toArray(annotation.payAttentionTo).filter(s => s.trim()).length > 0 && (
             <div
               style={{
                 background: "var(--orange-bg)",
@@ -73,7 +73,7 @@ export function ContextPanel({
               >
                 Attention
               </div>
-              {annotation.payAttentionTo}
+              <BulletList items={toArray(annotation.payAttentionTo)} color="var(--orange)" />
             </div>
           )}
 
@@ -200,26 +200,37 @@ function MiniCard({
   );
 }
 
-function BulletText({ text }: { text: string }) {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+/** Convert string or string[] to string[], handling legacy cached reports */
+function toArray(value: string | string[]): string[] {
+  if (Array.isArray(value)) return value;
+  // Legacy: split on sentence boundaries as fallback, but keep it simple
+  return [value];
+}
 
-  if (sentences.length <= 1) {
+function BulletList({ items, color }: { items: string[]; color?: string }) {
+  const textColor = color || "var(--text-secondary)";
+  const dotColor = color || "var(--accent)";
+  const filtered = items.filter((s) => s.trim());
+
+  if (filtered.length === 0) return null;
+
+  if (filtered.length === 1) {
     return (
-      <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: 1.6, margin: 0 }}>
-        {text}
+      <p style={{ fontSize: "12.5px", color: textColor, lineHeight: 1.6, margin: 0 }}>
+        {filtered[0]}
       </p>
     );
   }
 
   return (
     <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-      {sentences.map((s, i) => (
+      {filtered.map((s, i) => (
         <li
           key={i}
           className="flex"
           style={{
             fontSize: "12.5px",
-            color: "var(--text-secondary)",
+            color: textColor,
             lineHeight: 1.6,
             marginBottom: "4px",
             gap: "8px",
@@ -227,10 +238,11 @@ function BulletText({ text }: { text: string }) {
         >
           <span
             style={{
-              color: "var(--accent)",
+              color: dotColor,
               flexShrink: 0,
               fontSize: "14px",
               lineHeight: "20px",
+              opacity: 0.7,
             }}
           >
             •

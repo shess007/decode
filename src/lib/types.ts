@@ -95,8 +95,8 @@ export type Complexity = "trivial" | "moderate" | "complex";
 export interface FileAnnotation {
   filePath: string;
   roleInPR: string;
-  whatChanged: string;
-  payAttentionTo: string;
+  whatChanged: string | string[];
+  payAttentionTo: string | string[];
   changeType: ChangeType;
   complexity: Complexity;
 }

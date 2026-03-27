@@ -31,8 +31,8 @@ Schema:
   "fileAnnotations": [{
     "filePath": "string",
     "roleInPR": "string (one sentence)",
-    "whatChanged": "string (2-5 sentences)",
-    "payAttentionTo": "string (non-obvious things, edge cases)",
+    "whatChanged": ["string (each item is one distinct point about what changed, 2-5 items)"],
+    "payAttentionTo": ["string (each item is one distinct thing to watch for, 1-4 items, omit if nothing notable)"],
     "changeType": "core-logic | api-change | config | types | tests | refactor | new-file | deletion | styling | dependency",
     "complexity": "trivial | moderate | complex"
   }],
