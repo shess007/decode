@@ -38,18 +38,16 @@ export function ContextPanel({
       {activeFile && annotation ? (
         <div style={{ padding: "20px 16px", flex: 1, minHeight: 0, overflowY: "auto" }}>
           {/* Role in this PR */}
-          <Section label="Role in this PR">
-            <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.55, margin: 0 }}>
+          <Section label="Role">
+            <p style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.6, margin: 0 }}>
               {annotation.roleInPR}
             </p>
           </Section>
 
-          {/* What changed — skip for trivial */}
+          {/* What changed — skip for trivial, render as bullets */}
           {annotation.complexity !== "trivial" && annotation.whatChanged && (
             <Section label="What changed">
-              <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.55, margin: 0 }}>
-                {annotation.whatChanged}
-              </p>
+              <BulletText text={annotation.whatChanged} />
             </Section>
           )}
 
@@ -60,10 +58,10 @@ export function ContextPanel({
                 background: "var(--orange-bg)",
                 border: "1px solid var(--orange-border)",
                 borderRadius: "var(--radius-lg)",
-                padding: "10px 12px",
-                fontSize: "11.5px",
+                padding: "12px 14px",
+                fontSize: "12.5px",
                 color: "var(--orange)",
-                lineHeight: 1.55,
+                lineHeight: 1.6,
                 marginTop: "16px",
               }}
             >
@@ -184,7 +182,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginTop: "14px" }}>
+    <div style={{ marginTop: "16px" }}>
       <div
         style={{
           fontSize: "10px",
@@ -192,13 +190,57 @@ function Section({
           textTransform: "uppercase",
           letterSpacing: "1px",
           color: "var(--text-tertiary)",
-          marginBottom: "4px",
+          marginBottom: "6px",
         }}
       >
         {label}
       </div>
       {children}
     </div>
+  );
+}
+
+/** Splits text into sentences and renders as bullet points */
+function BulletText({ text }: { text: string }) {
+  // Split on sentence boundaries
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+
+  if (sentences.length <= 1) {
+    return (
+      <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: 1.6, margin: 0 }}>
+        {text}
+      </p>
+    );
+  }
+
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+      {sentences.map((s, i) => (
+        <li
+          key={i}
+          className="flex"
+          style={{
+            fontSize: "12.5px",
+            color: "var(--text-secondary)",
+            lineHeight: 1.6,
+            marginBottom: "4px",
+            gap: "8px",
+          }}
+        >
+          <span
+            style={{
+              color: "var(--accent)",
+              flexShrink: 0,
+              fontSize: "14px",
+              lineHeight: "20px",
+            }}
+          >
+            •
+          </span>
+          <span>{s.trim()}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

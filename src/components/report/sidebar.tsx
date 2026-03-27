@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { DecodeReport, FileAnnotation } from "@/lib/types";
 import {
   changeTypeColor,
@@ -13,6 +14,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
+  const [overviewOpen, setOverviewOpen] = useState(true);
   const annotationMap = new Map(
     report.fileAnnotations.map((a) => [a.filePath, a])
   );
@@ -26,49 +28,92 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
         padding: "16px 0",
       }}
     >
-      {/* PR Overview */}
-      <div style={{ padding: "0 16px 16px" }}>
+      {/* PR Overview — collapsible */}
+      <div style={{ padding: "0 16px 0" }}>
+        <button
+          onClick={() => setOverviewOpen(!overviewOpen)}
+          className="flex items-center justify-between w-full"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0 0 10px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "10px",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "1.2px",
+              color: "var(--text-tertiary)",
+            }}
+          >
+            PR Overview
+          </span>
+          <span
+            style={{
+              fontSize: "12px",
+              color: "var(--text-tertiary)",
+              transition: "transform var(--transition-normal)",
+              transform: overviewOpen ? "rotate(90deg)" : "rotate(0deg)",
+            }}
+          >
+            ›
+          </span>
+        </button>
+
         <div
           style={{
-            fontSize: "10px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "1.2px",
-            color: "var(--text-tertiary)",
-            marginBottom: "8px",
+            display: "grid",
+            gridTemplateRows: overviewOpen ? "1fr" : "0fr",
+            transition: "grid-template-rows var(--transition-normal)",
           }}
         >
-          PR Overview
-        </div>
-        <p
-          style={{
-            fontSize: "11.5px",
-            color: "var(--text-secondary)",
-            lineHeight: 1.55,
-            margin: "0 0 8px",
-          }}
-        >
-          {truncateToSentences(report.overview.goal, 2)}
-        </p>
-        {report.overview.keyDecisions.length > 0 && (
-          <div className="flex flex-wrap" style={{ gap: "4px" }}>
-            {report.overview.keyDecisions.slice(0, 4).map((d, i) => (
-              <span
-                key={i}
+          <div style={{ overflow: "hidden" }}>
+            <div style={{ paddingBottom: "16px" }}>
+              <p
                 style={{
-                  fontSize: "9px",
-                  background: "var(--bg-muted)",
-                  color: "var(--text-secondary)",
-                  padding: "2px 7px",
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border-default)",
+                  fontSize: "12.5px",
+                  color: "var(--text-primary)",
+                  lineHeight: 1.6,
+                  margin: "0 0 10px",
                 }}
               >
-                {d}
-              </span>
-            ))}
+                {truncateToSentences(report.overview.goal, 2)}
+              </p>
+              {report.overview.keyDecisions.length > 0 && (
+                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                  {report.overview.keyDecisions.slice(0, 5).map((d, i) => (
+                    <li
+                      key={i}
+                      className="flex"
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        lineHeight: 1.5,
+                        marginBottom: "4px",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "var(--accent)",
+                          flexShrink: 0,
+                          fontSize: "14px",
+                          lineHeight: "16px",
+                        }}
+                      >
+                        •
+                      </span>
+                      <span>{d}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       <div style={{ borderTop: "1px solid var(--border-default)", marginBottom: "12px" }} />
