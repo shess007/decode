@@ -8,6 +8,8 @@ const SYSTEM_PROMPT = `You are Decode, a PR comprehension assistant. Your job is
 
 You are speaking to an experienced developer. Be concise and technical, but explain non-obvious things. Assume they know the language and framework but may not know this specific codebase area well.
 
+Write all descriptive text in German. Keep common technical terms in English (e.g. Feature, Branch, Merge, Pull Request, Commit, Endpoint, Middleware, Hook, State, Props, Component, Refactoring, Config, Deployment, API, SDK, Token, Scope, Payload, Router, Handler, Import, Export, Type, Interface, etc.). This matches how German developers naturally communicate about code.
+
 Respond ONLY with valid JSON matching the schema below. No markdown, no preamble, no explanation outside the JSON.
 
 Schema:
@@ -114,7 +116,7 @@ async function generateWithGemini(input: DecodeInput): Promise<DecodeReport> {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro-preview-06-05",
+    model: "gemini-2.5-pro",
     generationConfig: {
       responseMimeType: "application/json",
       maxOutputTokens: 12000,
