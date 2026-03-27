@@ -499,15 +499,25 @@ export function DiffPanel({
   const { directory, filename } = splitFilePath(filePath);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ padding: "10px", background: "var(--bg-base)" }}>
+      <div
+        className="flex flex-col flex-1"
+        style={{
+          background: "var(--bg-card)",
+          borderRadius: "var(--radius-xl)",
+          border: "1px solid var(--border-card)",
+          overflow: "hidden",
+          minHeight: 0,
+        }}
+      >
       {/* Navigation bar */}
       <div
         className="flex items-center justify-between"
         style={{
-          padding: "8px 12px",
+          padding: "10px 14px",
           borderBottom: "1px solid var(--border-default)",
           flexShrink: 0,
-          background: "var(--bg-surface)",
+          background: "var(--bg-card-header)",
         }}
       >
         <div
@@ -547,8 +557,8 @@ export function DiffPanel({
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
-            <span style={{ color: "var(--text-tertiary)" }}>{directory}</span>
-            <span style={{ color: "var(--text-primary)" }}>{filename}</span>
+            <span style={{ color: "var(--text-tertiary)", fontFamily: "var(--font-sans)", fontSize: "12px" }}>{directory}</span>
+            <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>{filename}</span>
             <span style={{ color: "var(--text-tertiary)", marginLeft: "4px", fontSize: "10px" }}>↗</span>
           </a>
           {annotation && (
@@ -557,8 +567,8 @@ export function DiffPanel({
                 style={{
                   fontSize: "9px",
                   fontWeight: 600,
-                  padding: "2px 6px",
-                  borderRadius: "var(--radius-sm)",
+                  padding: "2px 9px",
+                  borderRadius: "999px",
                   letterSpacing: "0.3px",
                   textTransform: "lowercase",
                   background: changeTypeBadgeBg[annotation.changeType],
@@ -667,11 +677,11 @@ export function DiffPanel({
                       <span
                         className="flex-shrink-0"
                         style={{
-                          width: "80px",
+                          width: "84px",
                           padding: "0 8px",
                           textAlign: "right",
                           color: "var(--text-tertiary)",
-                          fontSize: "10px",
+                          fontSize: "11px",
                           userSelect: "none",
                           display: "flex",
                           gap: "4px",
@@ -765,6 +775,7 @@ export function DiffPanel({
             })}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

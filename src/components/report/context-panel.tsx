@@ -21,8 +21,6 @@ export function ContextPanel({
     report.fileAnnotations.map((a) => [a.filePath, a])
   );
   const annotation = activeFile ? annotationMap.get(activeFile) : null;
-
-  // Find related files from crossFileMap
   const relatedFiles = activeFile ? getRelatedFiles(report, activeFile) : [];
 
   return (
@@ -30,28 +28,27 @@ export function ContextPanel({
       className="flex flex-col h-full"
       style={{
         background: "var(--bg-surface)",
-        borderLeft: "1px solid var(--border-default)",
+        borderLeft: "1px solid var(--border-card)",
         overflowY: "auto",
       }}
     >
-      {/* File annotation section */}
       {activeFile && annotation ? (
-        <div style={{ padding: "20px 16px", flex: 1, minHeight: 0, overflowY: "auto" }}>
-          {/* Role in this PR */}
-          <Section label="Role">
+        <div style={{ padding: "16px 14px", flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }}>
+          {/* Role — mini-card */}
+          <MiniCard label="Role">
             <p style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.6, margin: 0 }}>
               {annotation.roleInPR}
             </p>
-          </Section>
+          </MiniCard>
 
-          {/* What changed — skip for trivial, render as bullets */}
+          {/* What changed — mini-card, skip for trivial */}
           {annotation.complexity !== "trivial" && annotation.whatChanged && (
-            <Section label="What changed">
+            <MiniCard label="What changed">
               <BulletText text={annotation.whatChanged} />
-            </Section>
+            </MiniCard>
           )}
 
-          {/* Pay attention to */}
+          {/* Attention callout — elevated card */}
           {annotation.payAttentionTo && annotation.payAttentionTo.trim() !== "" && (
             <div
               style={{
@@ -62,29 +59,27 @@ export function ContextPanel({
                 fontSize: "12.5px",
                 color: "var(--orange)",
                 lineHeight: 1.6,
-                marginTop: "16px",
               }}
             >
-              <span style={{ fontWeight: 600 }}>→ </span>
-              {annotation.payAttentionTo}
-            </div>
-          )}
-
-          {/* Related files */}
-          {relatedFiles.length > 0 && (
-            <div style={{ marginTop: "20px" }}>
               <div
                 style={{
                   fontSize: "10px",
                   fontWeight: 600,
                   textTransform: "uppercase",
                   letterSpacing: "1px",
-                  color: "var(--text-tertiary)",
-                  marginBottom: "8px",
+                  marginBottom: "6px",
+                  opacity: 0.8,
                 }}
               >
-                Related files
+                Attention
               </div>
+              {annotation.payAttentionTo}
+            </div>
+          )}
+
+          {/* Related files — mini-card */}
+          {relatedFiles.length > 0 && (
+            <MiniCard label="Related files">
               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                 {relatedFiles.map((rf) => {
                   const rfAnnotation = annotationMap.get(rf.filePath);
@@ -98,8 +93,8 @@ export function ContextPanel({
                       onClick={() => onFileClick(rf.filePath)}
                       className="flex items-center w-full text-left"
                       style={{
-                        padding: "5px 8px",
-                        borderRadius: "var(--radius-md)",
+                        padding: "4px 6px",
+                        borderRadius: "var(--radius-sm)",
                         border: "none",
                         background: "transparent",
                         cursor: "pointer",
@@ -107,7 +102,7 @@ export function ContextPanel({
                         gap: "8px",
                       }}
                       onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "var(--bg-elevated)")
+                        (e.currentTarget.style.background = "var(--bg-muted)")
                       }
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.background = "transparent")
@@ -124,8 +119,8 @@ export function ContextPanel({
                       />
                       <span
                         style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: "10px",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "11px",
                           color: "var(--text-secondary)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -151,7 +146,7 @@ export function ContextPanel({
                   );
                 })}
               </div>
-            </div>
+            </MiniCard>
           )}
         </div>
       ) : (
@@ -160,7 +155,7 @@ export function ContextPanel({
           style={{
             flex: 1,
             color: "var(--text-tertiary)",
-            fontSize: "11px",
+            fontSize: "12px",
             padding: "20px",
             textAlign: "center",
           }}
@@ -168,13 +163,11 @@ export function ContextPanel({
           Select a file to see annotations
         </div>
       )}
-
     </div>
   );
 }
 
-
-function Section({
+function MiniCard({
   label,
   children,
 }: {
@@ -182,7 +175,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginTop: "16px" }}>
+    <div
+      style={{
+        background: "var(--bg-elevated)",
+        borderRadius: "var(--radius-lg)",
+        padding: "12px 14px",
+        border: "1px solid var(--border-default)",
+      }}
+    >
       <div
         style={{
           fontSize: "10px",
@@ -190,7 +190,7 @@ function Section({
           textTransform: "uppercase",
           letterSpacing: "1px",
           color: "var(--text-tertiary)",
-          marginBottom: "6px",
+          marginBottom: "8px",
         }}
       >
         {label}
@@ -200,9 +200,7 @@ function Section({
   );
 }
 
-/** Splits text into sentences and renders as bullet points */
 function BulletText({ text }: { text: string }) {
-  // Split on sentence boundaries
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
 
   if (sentences.length <= 1) {
@@ -280,4 +278,3 @@ function getRelatedFiles(
     relationship,
   }));
 }
-

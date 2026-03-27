@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  /* Backgrounds — 4 levels of depth */
+  /* Backgrounds — 6 levels of depth */
   --bg-base: #0e0f14;
   --bg-surface: #161820;
+  --bg-card: #1a1d27;
+  --bg-card-header: #1e2130;
   --bg-elevated: #1c1e28;
+  --bg-inset: #13141a;
   --bg-muted: #252736;
 
   /* Text — 3 levels of emphasis */
@@ -36,15 +39,17 @@
   --teal-bg: rgba(45, 212, 191, 0.08);
 
   /* Borders */
-  --border-default: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(255, 255, 255, 0.10);
+  --border-hover: rgba(255, 255, 255, 0.14);
   --border-active: rgba(255, 255, 255, 0.18);
 
-  /* Radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  /* Radii — rounder for rich app feel */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
 
   /* Fonts */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;

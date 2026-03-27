@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { DecodeReport, FileAnnotation } from "@/lib/types";
+import type { DecodeReport } from "@/lib/types";
 import {
   changeTypeColor,
   splitFilePath,
@@ -23,103 +23,115 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
     <aside
       style={{
         background: "var(--bg-surface)",
-        borderRight: "1px solid var(--border-default)",
+        borderRight: "1px solid var(--border-card)",
         overflowY: "auto",
         padding: "16px 0",
       }}
     >
-      {/* PR Overview — collapsible */}
-      <div style={{ padding: "0 16px 0" }}>
-        <button
-          onClick={() => setOverviewOpen(!overviewOpen)}
-          className="flex items-center justify-between w-full"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "0 0 10px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "10px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "1.2px",
-              color: "var(--text-tertiary)",
-            }}
-          >
-            PR Overview
-          </span>
-          <span
-            style={{
-              fontSize: "12px",
-              color: "var(--text-tertiary)",
-              transition: "transform var(--transition-normal)",
-              transform: overviewOpen ? "rotate(90deg)" : "rotate(0deg)",
-            }}
-          >
-            ›
-          </span>
-        </button>
-
+      {/* PR Overview — collapsible card */}
+      <div style={{ padding: "0 10px", marginBottom: "14px" }}>
         <div
           style={{
-            display: "grid",
-            gridTemplateRows: overviewOpen ? "1fr" : "0fr",
-            transition: "grid-template-rows var(--transition-normal)",
+            background: "var(--bg-elevated)",
+            borderRadius: "var(--radius-lg)",
+            border: "1px solid var(--border-default)",
+            overflow: "hidden",
           }}
         >
-          <div style={{ overflow: "hidden" }}>
-            <div style={{ paddingBottom: "16px" }}>
-              <p
-                style={{
-                  fontSize: "12.5px",
-                  color: "var(--text-primary)",
-                  lineHeight: 1.6,
-                  margin: "0 0 10px",
-                }}
-              >
-                {truncateToSentences(report.overview.goal, 2)}
-              </p>
-              {report.overview.keyDecisions.length > 0 && (
-                <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                  {report.overview.keyDecisions.slice(0, 5).map((d, i) => (
-                    <li
-                      key={i}
-                      className="flex"
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--text-secondary)",
-                        lineHeight: 1.5,
-                        marginBottom: "4px",
-                        gap: "8px",
-                      }}
-                    >
-                      <span
+          <button
+            onClick={() => setOverviewOpen(!overviewOpen)}
+            className="flex items-center justify-between w-full"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "10px 12px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "1.2px",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              PR Overview
+            </span>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--text-tertiary)",
+                transition: "transform var(--transition-normal)",
+                transform: overviewOpen ? "rotate(90deg)" : "rotate(0deg)",
+              }}
+            >
+              ›
+            </span>
+          </button>
+
+          {/* Goal — always visible */}
+          <div style={{ padding: "0 12px 12px" }}>
+            <p
+              style={{
+                fontSize: "12.5px",
+                color: "var(--text-primary)",
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              {truncateToSentences(report.overview.goal, 2)}
+            </p>
+          </div>
+
+          {/* Key decisions — collapsible */}
+          {report.overview.keyDecisions.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateRows: overviewOpen ? "1fr" : "0fr",
+                transition: "grid-template-rows var(--transition-normal)",
+              }}
+            >
+              <div style={{ overflow: "hidden" }}>
+                <div style={{ padding: "0 12px 12px" }}>
+                  <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                    {report.overview.keyDecisions.slice(0, 5).map((d, i) => (
+                      <li
+                        key={i}
+                        className="flex"
                         style={{
-                          color: "var(--accent)",
-                          flexShrink: 0,
-                          fontSize: "14px",
-                          lineHeight: "16px",
+                          fontSize: "11px",
+                          color: "var(--text-secondary)",
+                          lineHeight: 1.5,
+                          marginBottom: "4px",
+                          gap: "8px",
                         }}
                       >
-                        •
-                      </span>
-                      <span>{d}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <span
+                          style={{
+                            color: "var(--accent)",
+                            flexShrink: 0,
+                            fontSize: "14px",
+                            lineHeight: "16px",
+                          }}
+                        >
+                          •
+                        </span>
+                        <span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <div style={{ borderTop: "1px solid var(--border-default)", marginBottom: "12px" }} />
-
       {/* Review Order */}
-      <div style={{ padding: "0 12px" }}>
+      <div style={{ padding: "0 10px" }}>
         <div
           style={{
             fontSize: "10px",
@@ -135,24 +147,34 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
         </div>
 
         {report.reviewOrder.phases.map((phase, i) => (
-          <div key={i} style={{ marginBottom: "16px" }}>
-            {/* Phase header */}
+          <div
+            key={i}
+            style={{
+              marginBottom: "20px",
+              paddingBottom: "16px",
+              borderBottom: i < report.reviewOrder.phases.length - 1 ? "1px solid var(--border-default)" : "none",
+            }}
+          >
+            {/* Phase header — circular number + label */}
             <div
-              className="flex items-baseline gap-2"
-              style={{ marginBottom: "6px", padding: "0 8px" }}
+              className="flex items-start"
+              style={{ gap: "8px", marginBottom: "6px", padding: "0 6px" }}
             >
               <span
+                className="flex items-center justify-center"
                 style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  color: "var(--accent)",
-                  background: "var(--accent-dim)",
-                  padding: "2px 6px",
-                  borderRadius: "var(--radius-sm)",
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "50%",
+                  background: "var(--bg-muted)",
+                  border: "1px solid var(--border-default)",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                  flexShrink: 0,
                 }}
               >
-                {String(i + 1).padStart(2, "0")}
+                {i + 1}
               </span>
               <span
                 style={{
@@ -180,14 +202,18 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
                   onClick={() => onFileClick(filePath)}
                   className="flex items-center gap-2 w-full text-left"
                   style={{
-                    padding: "4px 8px 4px 24px",
+                    padding: "5px 8px 5px 36px",
                     borderRadius: "var(--radius-md)",
                     cursor: "pointer",
-                    transition: `background var(--transition-fast)`,
-                    background: isActive
-                      ? "var(--accent-dim)"
-                      : "transparent",
+                    transition: "all var(--transition-fast)",
+                    background: isActive ? "var(--accent-dim)" : "transparent",
+                    borderLeft: isActive
+                      ? "2px solid var(--accent)"
+                      : "2px solid transparent",
                     border: "none",
+                    borderLeftWidth: "2px",
+                    borderLeftStyle: "solid",
+                    borderLeftColor: isActive ? "var(--accent)" : "transparent",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive)
@@ -209,9 +235,9 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
                   />
                   <span
                     style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "11px",
-                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "12px",
+                      color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -226,44 +252,43 @@ export function Sidebar({ report, activeFile, onFileClick }: SidebarProps) {
         ))}
       </div>
 
-      {/* Connections */}
+      {/* Connections — mini-card */}
       {report.crossFileMap.dataFlows.length > 0 && (
-        <div
-          style={{
-            marginTop: "24px",
-            borderTop: "1px solid var(--border-default)",
-            paddingTop: "16px",
-            padding: "16px 20px 0",
-          }}
-        >
+        <div style={{ padding: "0 10px", marginTop: "12px" }}>
           <div
             style={{
-              fontSize: "10px",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "1.2px",
-              color: "var(--text-tertiary)",
-              marginBottom: "10px",
+              background: "var(--bg-elevated)",
+              borderRadius: "var(--radius-lg)",
+              padding: "12px",
+              border: "1px solid var(--border-default)",
             }}
           >
-            Connections
-          </div>
-          {report.crossFileMap.dataFlows.map((flow, i) => (
             <div
-              key={i}
               style={{
-                fontSize: "11px",
-                lineHeight: "1.55",
-                color:
-                  i === 0
-                    ? "var(--text-secondary)"
-                    : "var(--text-tertiary)",
-                marginBottom: "4px",
+                fontSize: "10px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "1.2px",
+                color: "var(--text-tertiary)",
+                marginBottom: "8px",
               }}
             >
-              {flow.description}
+              Connections
             </div>
-          ))}
+            {report.crossFileMap.dataFlows.slice(0, 3).map((flow, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: "11px",
+                  lineHeight: "1.55",
+                  color: "var(--text-secondary)",
+                  marginBottom: "4px",
+                }}
+              >
+                {flow.description}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </aside>
