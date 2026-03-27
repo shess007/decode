@@ -1,43 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDiff, parsePrUrl } from "@/lib/bitbucket";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
-
-const CACHE_DIR = path.join(process.cwd(), ".cache", "decode-diffs");
-
-async function readDiffCache(key: string): Promise<string | null> {
-  try {
-    return await readFile(
-      path.join(CACHE_DIR, `${key.replace(/[^a-zA-Z0-9_-]/g, "_")}.diff`),
-      "utf-8"
-    );
-  } catch {
-    return null;
-  }
-}
-
-async function writeDiffCache(key: string, diff: string): Promise<void> {
-  try {
-    await mkdir(CACHE_DIR, { recursive: true });
-    await writeFile(
-      path.join(CACHE_DIR, `${key.replace(/[^a-zA-Z0-9_-]/g, "_")}.diff`),
-      diff
-    );
-  } catch (e) {
-    console.error("Diff cache write failed:", e);
-  }
-}
+import { readDiffCache, writeDiffCache } from "@/lib/cache";
 
 /** Parse a full unified diff into per-file sections */
 function splitDiffByFile(fullDiff: string): Record<string, string> {
   const files: Record<string, string> = {};
-  // Split on "diff --git" boundaries
   const parts = fullDiff.split(/^(?=diff --git )/m);
 
   for (const part of parts) {
     if (!part.trim()) continue;
 
-    // Extract file path from "diff --git a/path b/path" or from "+++ b/path"
     const bMatch = part.match(/^\+\+\+ b\/(.+)$/m);
     const aMatch = part.match(/^--- a\/(.+)$/m);
     const gitMatch = part.match(/^diff --git a\/.+ b\/(.+)$/m);
@@ -91,7 +63,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (filePath) {
-      // Return just one file's diff
       const fileDiffs = splitDiffByFile(fullDiff);
       const match = fileDiffs[filePath];
       if (!match) {
@@ -103,7 +74,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ filePath, diff: match });
     }
 
-    // Return all file diffs
     const fileDiffs = splitDiffByFile(fullDiff);
     return NextResponse.json({ files: fileDiffs });
   } catch (e) {
