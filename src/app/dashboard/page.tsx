@@ -2,7 +2,7 @@
 
 import { TopBar } from "@/components/report/topbar";
 import { useAuthStore } from "@/stores/auth-store";
-import { useDecodeStore } from "@/stores/decode-store";
+import { useDecodeStore, type PreflightResult } from "@/stores/decode-store";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 
@@ -31,7 +31,7 @@ interface RecentReport {
 
 export default function DashboardPage() {
   const { user, loading, fetchSession } = useAuthStore();
-  const { decode, decodeFromUrl } = useDecodeStore();
+  const { decode, decodeFromUrl, runPreflight, runPreflightFromUrl, clearPreflight, preflight, preflighting } = useDecodeStore();
   const router = useRouter();
 
   const [reviews, setReviews] = useState<ReviewPR[]>([]);
@@ -40,6 +40,16 @@ export default function DashboardPage() {
   const [prUrl, setPrUrl] = useState("");
   const [decoding, setDecoding] = useState<number | null>(null);
   const [decodingUrl, setDecodingUrl] = useState(false);
+
+  // Pending decode info (for preflight confirmation)
+  const [pendingDecode, setPendingDecode] = useState<{
+    type: "pr" | "url";
+    workspace?: string;
+    repo?: string;
+    prId?: number;
+    url?: string;
+    model: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchSession();
@@ -76,22 +86,59 @@ export default function DashboardPage() {
   }, [user]);
 
   const handleDecodePR = useCallback(
-    async (pr: ReviewPR) => {
+    async (pr: ReviewPR, model: string) => {
       const fullName = pr.source.repository.full_name;
       const [workspace, repo] = fullName.split("/");
-      setDecoding(pr.id);
-      await decode(workspace, repo, pr.id, "gemini");
-      router.push("/decode/report");
+
+      // Run preflight
+      const result = await runPreflight(workspace, repo, pr.id);
+      if (!result) return;
+
+      if (result.cached || !result.warning) {
+        setDecoding(pr.id);
+        await decode(workspace, repo, pr.id, model);
+        router.push("/decode/report");
+      } else {
+        // Show warning, store pending decode
+        setPendingDecode({ type: "pr", workspace, repo, prId: pr.id, model });
+      }
     },
-    [decode, router]
+    [decode, runPreflight, router]
   );
 
-  const handleDecodeUrl = useCallback(async () => {
+  const handleDecodeUrl = useCallback(async (model: string) => {
     if (!prUrl.trim()) return;
-    setDecodingUrl(true);
-    await decodeFromUrl(prUrl.trim(), "gemini");
+
+    const result = await runPreflightFromUrl(prUrl.trim());
+    if (!result) return;
+
+    if (result.cached || !result.warning) {
+      setDecodingUrl(true);
+      await decodeFromUrl(prUrl.trim(), model);
+      router.push("/decode/report");
+    } else {
+      setPendingDecode({ type: "url", url: prUrl.trim(), model });
+    }
+  }, [prUrl, decodeFromUrl, runPreflightFromUrl, router]);
+
+  const handleConfirmPending = useCallback(async () => {
+    if (!pendingDecode) return;
+    clearPreflight();
+    if (pendingDecode.type === "pr" && pendingDecode.workspace && pendingDecode.repo && pendingDecode.prId) {
+      setDecoding(pendingDecode.prId);
+      await decode(pendingDecode.workspace, pendingDecode.repo, pendingDecode.prId, pendingDecode.model);
+    } else if (pendingDecode.type === "url" && pendingDecode.url) {
+      setDecodingUrl(true);
+      await decodeFromUrl(pendingDecode.url, pendingDecode.model);
+    }
+    setPendingDecode(null);
     router.push("/decode/report");
-  }, [prUrl, decodeFromUrl, router]);
+  }, [pendingDecode, decode, decodeFromUrl, clearPreflight, router]);
+
+  const handleCancelPending = useCallback(() => {
+    clearPreflight();
+    setPendingDecode(null);
+  }, [clearPreflight]);
 
   const handleOpenRecent = useCallback(
     async (report: RecentReport) => {
@@ -239,26 +286,42 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDecodePR(pr)}
-                        disabled={decoding === pr.id}
-                        style={{
-                          padding: "8px 16px",
-                          background: "var(--accent)",
-                          color: "#fff",
-                          fontWeight: 500,
-                          fontSize: "12px",
-                          borderRadius: "var(--radius-md)",
-                          border: "none",
-                          cursor: decoding === pr.id ? "not-allowed" : "pointer",
-                          opacity: decoding === pr.id ? 0.5 : 1,
-                          flexShrink: 0,
-                          marginLeft: "12px",
-                          alignSelf: "center",
-                        }}
-                      >
-                        {decoding === pr.id ? "..." : "Decode"}
-                      </button>
+                      <div className="flex" style={{ gap: "4px", flexShrink: 0, marginLeft: "12px", alignSelf: "center" }}>
+                        <button
+                          onClick={() => handleDecodePR(pr, "gemini")}
+                          disabled={decoding === pr.id || preflighting}
+                          style={{
+                            padding: "7px 12px",
+                            background: "var(--accent)",
+                            color: "#fff",
+                            fontWeight: 500,
+                            fontSize: "11px",
+                            borderRadius: "var(--radius-sm)",
+                            border: "none",
+                            cursor: decoding === pr.id || preflighting ? "not-allowed" : "pointer",
+                            opacity: decoding === pr.id || preflighting ? 0.5 : 1,
+                          }}
+                        >
+                          {decoding === pr.id ? "..." : preflighting ? "..." : "Gemini"}
+                        </button>
+                        <button
+                          onClick={() => handleDecodePR(pr, "sonnet")}
+                          disabled={decoding === pr.id || preflighting}
+                          style={{
+                            padding: "7px 12px",
+                            background: "transparent",
+                            color: "var(--text-secondary)",
+                            fontWeight: 500,
+                            fontSize: "11px",
+                            borderRadius: "var(--radius-sm)",
+                            border: "1px solid var(--border-default)",
+                            cursor: decoding === pr.id || preflighting ? "not-allowed" : "pointer",
+                            opacity: decoding === pr.id || preflighting ? 0.5 : 1,
+                          }}
+                        >
+                          Sonnet
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -278,7 +341,7 @@ export default function DashboardPage() {
                   value={prUrl}
                   onChange={(e) => setPrUrl(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleDecodeUrl();
+                    if (e.key === "Enter") handleDecodeUrl("gemini");
                   }}
                   style={{
                     width: "100%",
@@ -298,23 +361,44 @@ export default function DashboardPage() {
                     (e.currentTarget.style.borderColor = "var(--border-default)")
                   }
                 />
-                <button
-                  onClick={handleDecodeUrl}
-                  disabled={!prUrl.trim() || decodingUrl}
-                  style={{
-                    padding: "10px",
-                    background: "var(--accent)",
-                    color: "#fff",
-                    fontWeight: 500,
-                    fontSize: "12px",
-                    borderRadius: "var(--radius-md)",
-                    border: "none",
-                    cursor: !prUrl.trim() || decodingUrl ? "not-allowed" : "pointer",
-                    opacity: !prUrl.trim() || decodingUrl ? 0.5 : 1,
-                  }}
-                >
-                  {decodingUrl ? "Decoding..." : "Decode"}
-                </button>
+                <div className="flex" style={{ gap: "6px" }}>
+                  <button
+                    onClick={() => handleDecodeUrl("gemini")}
+                    disabled={!prUrl.trim() || decodingUrl || preflighting}
+                    style={{
+                      padding: "10px 16px",
+                      background: "var(--accent)",
+                      color: "#fff",
+                      fontWeight: 500,
+                      fontSize: "12px",
+                      borderRadius: "var(--radius-md)",
+                      border: "none",
+                      cursor: !prUrl.trim() || decodingUrl || preflighting ? "not-allowed" : "pointer",
+                      opacity: !prUrl.trim() || decodingUrl || preflighting ? 0.5 : 1,
+                      flex: 1,
+                    }}
+                  >
+                    {preflighting ? "Checking..." : decodingUrl ? "Decoding..." : "Gemini"}
+                  </button>
+                  <button
+                    onClick={() => handleDecodeUrl("sonnet")}
+                    disabled={!prUrl.trim() || decodingUrl || preflighting}
+                    style={{
+                      padding: "10px 16px",
+                      background: "transparent",
+                      color: "var(--text-secondary)",
+                      fontWeight: 500,
+                      fontSize: "12px",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-default)",
+                      cursor: !prUrl.trim() || decodingUrl || preflighting ? "not-allowed" : "pointer",
+                      opacity: !prUrl.trim() || decodingUrl || preflighting ? 0.5 : 1,
+                      flex: 1,
+                    }}
+                  >
+                    Sonnet
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -396,6 +480,71 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Preflight warning */}
+        {preflight && !preflight.cached && preflight.warning && pendingDecode && (
+          <div
+            style={{
+              marginTop: "24px",
+              background: "var(--bg-surface)",
+              border: `1px solid ${preflight.warning === "large" ? "var(--coral)" : "var(--orange)"}`,
+              borderRadius: "var(--radius-xl)",
+              padding: "20px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: preflight.warning === "large" ? "var(--coral)" : "var(--orange)",
+                marginBottom: "10px",
+              }}
+            >
+              {preflight.warning === "large" ? "Very large PR" : "Large PR"} — est. ~${preflight.estimatedCost?.toFixed(3)} AI cost
+            </div>
+            <div
+              className="flex"
+              style={{ gap: "16px", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}
+            >
+              <span>{preflight.files?.included} of {preflight.files?.total} files</span>
+              <span>{preflight.diff?.filteredLines.toLocaleString()} diff lines</span>
+              <span>~{Math.round((preflight.estimatedInputTokens || 0) / 1000)}k tokens</span>
+            </div>
+            <div className="flex" style={{ gap: "8px" }}>
+              <button
+                onClick={handleConfirmPending}
+                disabled={decoding !== null || decodingUrl}
+                style={{
+                  padding: "10px 20px",
+                  background: "var(--accent)",
+                  color: "#fff",
+                  fontWeight: 500,
+                  fontSize: "12px",
+                  borderRadius: "var(--radius-md)",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Proceed with {pendingDecode.model === "sonnet" ? "Sonnet" : "Gemini"}
+              </button>
+              <button
+                onClick={handleCancelPending}
+                style={{
+                  padding: "10px 20px",
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  fontWeight: 500,
+                  fontSize: "12px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-default)",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
